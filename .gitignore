@@ -1,0 +1,49 @@
+# ==========================================
+# RTU AI Academic Assistant - .gitignore
+# ==========================================
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Large binary weights (>100MB cannot be pushed to GitHub)
+*.gguf
+models/*.gguf
+rtu-ai-assistant/models/*.gguf
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# System and editor files
+.DS_Store
+Thumbs.db
+desktop.ini
+.vscode/
+.idea/
+
+# Testing and coverage caches
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Logs and runtime artifacts
+*.log
+*.tmp
+*.bak
+
+# Large third-party textbooks & study notes (>10MB)
+cleaned_dataset/study_materials/
+
+# Heavy raw PDF datasets (ingested into database and FAISS index)
+cleaned_dataset/
+rtu-ai-assistant/syllabus/

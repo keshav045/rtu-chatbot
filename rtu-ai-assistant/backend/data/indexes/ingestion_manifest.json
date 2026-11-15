@@ -1,0 +1,30 @@
+{
+  "manifest_version": "1.0.0",
+  "created_at": "2026-11-12T19:37:49.014568",
+  "total_papers_cataloged": 123,
+  "total_papers_with_extracted_questions": 21,
+  "total_questions_ingested": 387,
+  "subject_breakdown": {
+    "AEM": 90,
+    "DSA": 21,
+    "DE": 36,
+    "MEFA": 28,
+    "OOP": 21,
+    "SE": 26,
+    "TC": 38,
+    "DMS": 13,
+    "MI": 18,
+    "DCCN": 49,
+    "DBMS": 35,
+    "TOC": 12
+  },
+  "semester_breakdown": {
+    "Semester 3": 260,
+    "Semester 4": 31,
+    "Semester 5": 96
+  },
+  "year_span": "2012 - 2026",
+  "database_path": "data/storage/rtu_metadata.db",
+  "validation_status": "PASSED",
+  "validation_errors": []
+}
