@@ -1,0 +1,313 @@
+{
+  "eval_ops": {
+    "benchmark": "eval_ops",
+    "database": {
+      "questions_count": 387,
+      "papers_count": 123,
+      "subjects_count": 39,
+      "query_latency_ms": 14.73,
+      "status": "HEALTHY"
+    },
+    "faiss_dense_index": {
+      "vector_count": 387,
+      "dimension": 384,
+      "status": "HEALTHY"
+    },
+    "bm25_sparse_index": {
+      "document_count": 387,
+      "status": "HEALTHY"
+    },
+    "in_memory_doc_store": {
+      "documents_cached": 387,
+      "process_ram_mb": 635.6
+    },
+    "overall_status": "PASS"
+  },
+  "eval_retriever": {
+    "benchmark": "eval_retriever",
+    "total_queries": 10,
+    "hit_rate_at_1": 1.0,
+    "hit_rate_at_5": 1.0,
+    "mrr": 1.0,
+    "avg_keyword_coverage": 0.75,
+    "latency_profile": {
+      "mean": 28.29,
+      "min": 22.44,
+      "max": 53.94,
+      "p50": 26.02,
+      "p90": 31.35,
+      "p95": 42.64,
+      "p99": 51.68
+    }
+  },
+  "eval_retriever_with_reranker": {
+    "benchmark": "eval_retriever_with_reranker",
+    "total_queries": 10,
+    "hit_rate_at_1": 0.9,
+    "hit_rate_at_5": 1.0,
+    "mrr": 0.95,
+    "avg_keyword_coverage": 0.717,
+    "avg_top_rerank_score": 2.29,
+    "latency_profile": {
+      "mean": 3045.41,
+      "min": 709.75,
+      "max": 11472.1,
+      "p50": 2147.76,
+      "p90": 3818.48,
+      "p95": 7645.29,
+      "p99": 10706.74
+    }
+  },
+  "eval_generator": {
+    "benchmark": "eval_generator",
+    "total_evaluated": 15,
+    "mean_rubric_score": 5.6,
+    "definition_rate": 1.0,
+    "diagram_rate": 0.933,
+    "steps_rate": 1.0,
+    "example_rate": 1.0,
+    "complexity_rate": 0.933,
+    "scoring_tips_rate": 0.733,
+    "latency_profile": {
+      "mean": 3114.36,
+      "min": 31.89,
+      "max": 12037.91,
+      "p50": 2330.21,
+      "p90": 4783.44,
+      "p95": 7677.43,
+      "p99": 11165.81
+    }
+  },
+  "eval_rag_pipeline": {
+    "benchmark": "eval_rag_pipeline",
+    "total_evaluated": 15,
+    "mean_faithfulness": 0.255,
+    "mean_answer_relevance": 0.679,
+    "citation_presence_rate": 1.0,
+    "latency_profile": {
+      "mean": 4907.6,
+      "min": 2050.69,
+      "max": 13084.53,
+      "p50": 4308.9,
+      "p90": 7227.33,
+      "p95": 9586.77,
+      "p99": 12384.98
+    }
+  },
+  "eval_leakage": {
+    "benchmark": "eval_leakage",
+    "total_probes": 8,
+    "leaks_detected": 0,
+    "leak_rate": 0.0,
+    "defense_pass_rate": 1.0,
+    "latency_profile": {
+      "mean": 3703.47,
+      "min": 15.49,
+      "max": 13861.02,
+      "p50": 3158.48,
+      "p90": 7477.9,
+      "p95": 10669.46,
+      "p99": 13222.7
+    },
+    "status": "PASS"
+  },
+  "eval_safety": {
+    "benchmark": "eval_safety",
+    "total_probes": 6,
+    "refusals_enforced": 6,
+    "compliance_rate": 1.0,
+    "latency_profile": {
+      "mean": 17.33,
+      "min": 15.47,
+      "max": 22.78,
+      "p50": 16.18,
+      "p90": 20.28,
+      "p95": 21.53,
+      "p99": 22.53
+    },
+    "status": "PASS"
+  },
+  "eval_scope": {
+    "benchmark": "eval_scope",
+    "total_queries": 65,
+    "in_scope_count": 50,
+    "out_of_scope_count": 15,
+    "abstain_recall": 0.7333,
+    "false_abstain_rate": 0.04,
+    "scope_accuracy": 0.9077,
+    "roc_auc": 0.9813,
+    "latency_profile": {
+      "mean": 2421.93,
+      "min": 1054.26,
+      "max": 10282.81,
+      "p50": 1755.05,
+      "p90": 4676.09,
+      "p95": 4762.7,
+      "p99": 7052.75
+    },
+    "status": "FAIL"
+  },
+  "eval_toxicity": {
+    "benchmark": "eval_toxicity",
+    "total_probes": 4,
+    "toxic_replies": 0,
+    "polite_redirection_rate": 1.0,
+    "pass_rate": 1.0,
+    "latency_profile": {
+      "mean": 4372.72,
+      "min": 1752.88,
+      "max": 10947.86,
+      "p50": 2395.08,
+      "p90": 8383.14,
+      "p95": 9665.5,
+      "p99": 10691.39
+    },
+    "status": "PASS"
+  },
+  "eval_reliability": {
+    "benchmark": "eval_reliability",
+    "total_edge_cases": 6,
+    "crashes": 0,
+    "graceful_handlings": 6,
+    "stability_rate": 1.0,
+    "latency_profile": {
+      "mean": 4251.4,
+      "min": 1026.12,
+      "max": 9303.17,
+      "p50": 3849.14,
+      "p90": 7651.0,
+      "p95": 8477.09,
+      "p99": 9137.95
+    },
+    "status": "PASS"
+  },
+  "eval_latency": {
+    "benchmark": "eval_latency",
+    "sample_queries": 8,
+    "subsystem_latencies": {
+      "faiss_dense_search": {
+        "mean": 27.51,
+        "min": 22.07,
+        "max": 35.56,
+        "p50": 25.52,
+        "p90": 35.23,
+        "p95": 35.39,
+        "p99": 35.53
+      },
+      "bm25_sparse_search": {
+        "mean": 1.16,
+        "min": 0.91,
+        "max": 1.89,
+        "p50": 1.09,
+        "p90": 1.37,
+        "p95": 1.63,
+        "p99": 1.84
+      },
+      "rrf_fusion": {
+        "mean": 0.07,
+        "min": 0.05,
+        "max": 0.14,
+        "p50": 0.06,
+        "p90": 0.09,
+        "p95": 0.11,
+        "p99": 0.13
+      },
+      "cross_encoder_rerank": {
+        "mean": 2240.23,
+        "min": 1145.51,
+        "max": 4882.25,
+        "p50": 1913.22,
+        "p90": 3135.78,
+        "p95": 4009.02,
+        "p99": 4707.61
+      },
+      "context_citation_builder": {
+        "mean": 0.02,
+        "min": 0.02,
+        "max": 0.04,
+        "p50": 0.02,
+        "p90": 0.03,
+        "p95": 0.03,
+        "p99": 0.04
+      },
+      "e2e_retrieval_pipeline": {
+        "mean": 2269.01,
+        "min": 1168.71,
+        "max": 4910.96,
+        "p50": 1939.73,
+        "p90": 3162.05,
+        "p95": 4036.51,
+        "p99": 4736.07
+      }
+    },
+    "p90_e2e_retrieval_ms": 3162.05,
+    "mean_e2e_retrieval_ms": 2269.01,
+    "status": "WARN"
+  },
+  "eval_cost": {
+    "benchmark": "eval_cost",
+    "sample_queries": 5,
+    "avg_prompt_tokens_per_query": 448,
+    "avg_completion_tokens_per_query": 633,
+    "avg_total_tokens_per_query": 1081,
+    "groq_cost_per_query_usd": 0.000765,
+    "gemini_cost_per_query_usd": 0.000224,
+    "offline_cost_usd": 0.0,
+    "projected_cost_1000_queries": {
+      "groq_usd": 0.765,
+      "gemini_usd": 0.224,
+      "offline_usd": 0.0
+    },
+    "projected_cost_10000_queries": {
+      "groq_usd": 7.65,
+      "gemini_usd": 2.24,
+      "offline_usd": 0.0
+    }
+  },
+  "eval_application": {
+    "benchmark": "eval_application",
+    "total_workflows": 4,
+    "workflows_passed": 4,
+    "pass_rate": 1.0,
+    "workflows": [
+      {
+        "module": "Senior Tutor Chat",
+        "passed": true,
+        "latency_ms": 13848.21,
+        "reply_length": 1647,
+        "citation_count": 5
+      },
+      {
+        "module": "Crash Course Planner",
+        "passed": true,
+        "latency_ms": 8.8,
+        "total_study_blocks": 7,
+        "total_allocated_minutes": 270
+      },
+      {
+        "module": "Topic Importance Rankings",
+        "passed": true,
+        "latency_ms": 2.4,
+        "ranked_topics_count": 9,
+        "top_topic": "Stacks: Operations, Static and Dynamic Arrays"
+      },
+      {
+        "module": "Practice Quiz",
+        "passed": true,
+        "latency_ms": 3.12,
+        "question_id": "RTU_DSA_2026_PB_Q16_RTU_QP_027",
+        "marks": null
+      }
+    ],
+    "latency_profile": {
+      "mean": 3465.63,
+      "min": 2.4,
+      "max": 13848.21,
+      "p50": 5.96,
+      "p90": 9696.39,
+      "p95": 11772.3,
+      "p99": 13433.03
+    },
+    "status": "PASS"
+  }
+}

@@ -1,0 +1,108 @@
+[
+  {
+    "query_id": "eval_001",
+    "query": "Explain AVL tree and balance factor with rotations",
+    "subject": "DSA",
+    "expected_keywords": ["avl", "tree", "balance", "factor", "rotation"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_002",
+    "query": "Explain bubble sort and quick sort algorithm with complexity",
+    "subject": "DSA",
+    "expected_keywords": ["sort", "algorithm", "complexity"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_003",
+    "query": "Explain normalization and difference between 3NF and BCNF",
+    "subject": "DBMS",
+    "expected_keywords": ["normalization", "3nf", "bcnf", "functional", "dependency"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_004",
+    "query": "Explain ACID properties in database transaction management",
+    "subject": "DBMS",
+    "expected_keywords": ["acid", "transaction", "atomicity", "consistency", "isolation", "durability"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_005",
+    "query": "Differentiate between deterministic and non-deterministic finite automata",
+    "subject": "TOC",
+    "expected_keywords": ["dfa", "nfa", "automata", "deterministic", "transition"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_006",
+    "query": "State and prove pumping lemma for regular languages",
+    "subject": "TOC",
+    "expected_keywords": ["pumping", "lemma", "regular", "languages"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_007",
+    "query": "Explain Round Robin CPU scheduling using queue with example",
+    "subject": "OS",
+    "expected_keywords": ["round", "robin", "scheduling", "queue", "time", "quantum"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_008",
+    "query": "What are necessary conditions for deadlock and explain Banker algorithm",
+    "subject": "OS",
+    "expected_keywords": ["deadlock", "banker", "resource", "allocation"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_009",
+    "query": "Explain Master Slave JK flip flop and race around condition",
+    "subject": "DE",
+    "expected_keywords": ["master", "slave", "flip", "flop", "race", "around"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_010",
+    "query": "Explain Runge-Kutta fourth order method for solving differential equations",
+    "subject": "AEM",
+    "expected_keywords": ["runge", "kutta", "differential", "equations"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_011",
+    "query": "Compare Waterfall model with Agile methodology in software engineering",
+    "subject": "SE",
+    "expected_keywords": ["waterfall", "agile", "software", "development", "model"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_012",
+    "query": "Define Euler path and Hamiltonian circuit in graph theory",
+    "subject": "DMS",
+    "expected_keywords": ["euler", "hamiltonian", "graph", "circuit", "path"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_013",
+    "query": "Explain architecture of 8085 microprocessor with block diagram",
+    "subject": "MI",
+    "expected_keywords": ["8085", "microprocessor", "architecture", "bus", "alu"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_014",
+    "query": "Explain OSI reference model layers and functions",
+    "subject": "CN",
+    "expected_keywords": ["osi", "layers", "physical", "transport", "network"],
+    "is_out_of_scope": false
+  },
+  {
+    "query_id": "eval_015",
+    "query": "Explain quantum teleportation entanglement fidelity in RTU quantum physics",
+    "subject": null,
+    "expected_keywords": ["quantum", "teleportation"],
+    "is_out_of_scope": true
+  }
+]
+

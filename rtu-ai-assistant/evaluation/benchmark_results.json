@@ -1,0 +1,162 @@
+{
+  "timestamp": "2026-11-15T12:06:20Z",
+  "total_queries": 15,
+  "metrics": {
+    "precision_at_1": 92.86,
+    "precision_at_5": 92.86,
+    "mrr": 0.9286,
+    "avg_latency_ms": 1621.36,
+    "citation_validity_percent": 100.0,
+    "out_of_scope_guard_rate": "1/1"
+  },
+  "query_results": [
+    {
+      "query_id": "eval_001",
+      "query": "Explain AVL tree and balance factor with rotations",
+      "subject": "DSA",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 2,
+      "latency_ms": 9752.53,
+      "top_source": "RTU_Sem3_3E1202_DSA_2026_Main.pdf",
+      "top_score": -7.945
+    },
+    {
+      "query_id": "eval_002",
+      "query": "Explain bubble sort and quick sort algorithm with complexity",
+      "subject": "DSA",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 5,
+      "latency_ms": 1200.97,
+      "top_source": "RTU_Sem3_3E1202_DSA_2026_Main.pdf",
+      "top_score": 6.962
+    },
+    {
+      "query_id": "eval_003",
+      "query": "Explain normalization and difference between 3NF and BCNF",
+      "subject": "DBMS",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 2,
+      "latency_ms": 944.82,
+      "top_source": "RTU_Sem5_5CS4-04_DBMS_2025_Main.pdf",
+      "top_score": 0.845
+    },
+    {
+      "query_id": "eval_004",
+      "query": "Explain ACID properties in database transaction management",
+      "subject": "DBMS",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 4,
+      "latency_ms": 865.75,
+      "top_source": "RTU_Sem5_5CS4-04_DBMS_2026_May.pdf",
+      "top_score": 5.763
+    },
+    {
+      "query_id": "eval_005",
+      "query": "Differentiate between deterministic and non-deterministic finite automata",
+      "subject": "TOC",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 1,
+      "latency_ms": 1276.86,
+      "top_source": "RTU_Sem5_5CS4-03_TOC_2026_May.pdf",
+      "top_score": 4.932
+    },
+    {
+      "query_id": "eval_006",
+      "query": "State and prove pumping lemma for regular languages",
+      "subject": "TOC",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 2,
+      "latency_ms": 986.96,
+      "top_source": "RTU_Sem5_5CS4-03_TOC_2026_May.pdf",
+      "top_score": 0.995
+    },
+    {
+      "query_id": "eval_007",
+      "query": "Explain Round Robin CPU scheduling using queue with example",
+      "subject": "OS",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 1,
+      "latency_ms": 784.27,
+      "top_source": "RTU_Sem3_3E1202_DSA_2026_Main.pdf",
+      "top_score": 6.558
+    },
+    {
+      "query_id": "eval_008",
+      "query": "What are necessary conditions for deadlock and explain Banker algorithm",
+      "subject": "OS",
+      "rank_first_relevant": null,
+      "relevant_in_top_5": 0,
+      "latency_ms": 2664.94,
+      "top_source": "RTU_Sem5_5CS4-04_DBMS_2025_Main.pdf",
+      "top_score": -7.228
+    },
+    {
+      "query_id": "eval_009",
+      "query": "Explain Master Slave JK flip flop and race around condition",
+      "subject": "DE",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 5,
+      "latency_ms": 796.14,
+      "top_source": "RTU_Sem3_3E1203_DE_2025_Main.pdf",
+      "top_score": -6.457
+    },
+    {
+      "query_id": "eval_010",
+      "query": "Explain Runge-Kutta fourth order method for solving differential equations",
+      "subject": "AEM",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 3,
+      "latency_ms": 899.36,
+      "top_source": "RTU_Sem3_3E1201_AEM_2012_Set2.pdf",
+      "top_score": 4.454
+    },
+    {
+      "query_id": "eval_011",
+      "query": "Compare Waterfall model with Agile methodology in software engineering",
+      "subject": "SE",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 5,
+      "latency_ms": 629.38,
+      "top_source": "RTU_Sem3_3E1205_SE_2026_Main.pdf",
+      "top_score": -0.871
+    },
+    {
+      "query_id": "eval_012",
+      "query": "Define Euler path and Hamiltonian circuit in graph theory",
+      "subject": "DMS",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 3,
+      "latency_ms": 762.65,
+      "top_source": "RTU_Sem4_4CS3-05_DMS_2026_May.pdf",
+      "top_score": 0.669
+    },
+    {
+      "query_id": "eval_013",
+      "query": "Explain architecture of 8085 microprocessor with block diagram",
+      "subject": "MI",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 1,
+      "latency_ms": 781.07,
+      "top_source": "RTU_Sem4_4CS3-04_MI_2026_May.pdf",
+      "top_score": 3.405
+    },
+    {
+      "query_id": "eval_014",
+      "query": "Explain OSI reference model layers and functions",
+      "subject": "CN",
+      "rank_first_relevant": 1,
+      "relevant_in_top_5": 1,
+      "latency_ms": 1058.09,
+      "top_source": "RTU_Sem5_5CS4-02_DCCN_2025_Main.pdf",
+      "top_score": 0.188
+    },
+    {
+      "query_id": "eval_015",
+      "query": "Explain quantum teleportation entanglement fidelity in RTU quantum physics",
+      "is_out_of_scope": true,
+      "top_score": -7.190855979919434,
+      "status": "PASSED (Low Confidence / Out-of-Scope Correctly Detected)",
+      "latency_ms": 916.6
+    }
+  ]
+}

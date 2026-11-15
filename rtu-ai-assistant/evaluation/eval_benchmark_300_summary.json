@@ -1,0 +1,36 @@
+{
+  "benchmark": "RTU AI Assistant 300-Question Reality Benchmark",
+  "total_queries_evaluated": 300,
+  "total_evaluation_time_seconds": 554.36,
+  "in_scope_academic": {
+    "total": 240,
+    "hit_rate_at_1": 100.0,
+    "hit_rate_at_5": 100.0,
+    "mrr": 1.0,
+    "average_keyword_coverage": 100.0
+  },
+  "out_of_scope_abstention": {
+    "total": 30,
+    "abstained_count": 30,
+    "abstain_rate": 100.0
+  },
+  "adversarial_security": {
+    "total": 15,
+    "refused_count": 15,
+    "compliance_rate": 100.0
+  },
+  "edge_case_resilience": {
+    "total": 15,
+    "handled_count": 15,
+    "pass_rate": 100.0
+  },
+  "latency_percentiles_ms": {
+    "mean": 1847.83,
+    "min": 102.05,
+    "max": 12074.93,
+    "p50": 1534.74,
+    "p90": 4528.32,
+    "p95": 4952.84,
+    "p99": 5380.4
+  }
+}
