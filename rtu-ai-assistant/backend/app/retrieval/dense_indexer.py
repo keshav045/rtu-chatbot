@@ -7,7 +7,7 @@ import os
 import json
 import logging
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Optional
 import numpy as np
 import faiss
 
@@ -73,7 +73,29 @@ class DenseIndexer:
         self.load_model()
         logger.info(f"Loaded FAISS dense index ({self.index.ntotal} vectors) and model {MODEL_NAME} eagerly into RAM.")
 
-    def search(self, query: str, top_k: int = 20) -> List[Tuple[str, float]]:
+    def search(
+        self,
+        query: str,
+        top_k: int = 20,
+        subject: Optional[str] = None,
+        id_mapping_meta: Optional[Dict[str, Any]] = None,
+    ) -> List[Tuple[str, float]]:
+        """
+        Searches the FAISS index for the top_k most similar vectors to the query.
+
+        TASK 4 – Subject-Boosted Dense Search:
+        When *subject* is provided and *id_mapping_meta* maps question_id → doc metadata,
+        results whose ``subject_short`` matches *subject* have their cosine similarity
+        multiplied by 1.25.  This pushes subject-specific results higher in the
+        pre-filter candidate list and improves Top-1 precision for subject sessions.
+
+        Parameters
+        ----------
+        query           : student query string
+        top_k           : number of candidates to return
+        subject         : optional subject filter for score boosting (e.g. 'DSA')
+        id_mapping_meta : optional dict mapping question_id → doc dict (from pipeline doc_store)
+        """
         if self.index is None or not self.id_mapping:
             self.load_index()
 
@@ -86,6 +108,17 @@ class DenseIndexer:
         results = []
         for idx, score in zip(indices[0], scores[0]):
             if idx != -1 and idx < len(self.id_mapping):
-                results.append((self.id_mapping[idx], float(score)))
+                qid = self.id_mapping[idx]
+                boosted_score = float(score)
+
+                # TASK 4: Boost subject-matching results
+                if subject and id_mapping_meta:
+                    doc_meta = id_mapping_meta.get(qid)
+                    if doc_meta:
+                        doc_subject = doc_meta.get("subject_short", "") or doc_meta.get("subject", "")
+                        if doc_subject and doc_subject.strip().upper() == subject.strip().upper():
+                            boosted_score *= 1.25
+
+                results.append((qid, boosted_score))
 
         return results

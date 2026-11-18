@@ -1,11 +1,80 @@
 """
 Conversational Memory & Contextual Query Rewriter
 Translates multi-turn follow-up queries into standalone retrieval queries
-while preserving student conversation context and tracking active topics.
+while preserving student conversation context, Hinglish normalization,
+RTU synonym expansion, and Part A/B/C hint detection.
 """
 
 import re
 from typing import List, Dict, Any, Optional
+
+# Hinglish phrase mappings (Hinglish -> English)
+HINGLISH_MAP = [
+    (r"\bkya hai\b", "what is"),
+    (r"\bkya hota hai\b", "what is"),
+    (r"\bkaise kaam karta hai\b", "how does it work"),
+    (r"\bkaise karte hain\b", "how to do"),
+    (r"\bkaise hota hai\b", "how does it happen"),
+    (r"\bsamjhao\b", "explain"),
+    (r"\bsamjhaye\b", "explain"),
+    (r"\bexplain karo\b", "explain"),
+    (r"\bexplain karte\b", "explain"),
+    (r"\bbatao\b", "explain"),
+    (r"\bbtao\b", "explain"),
+    (r"\blikho\b", "write"),
+    (r"\blikhiye\b", "write"),
+    (r"\bparibhasha\b", "definition"),
+    (r"\bparibhasha dijiye\b", "define"),
+    (r"\bdefinition do\b", "definition of"),
+    (r"\bacchabhai\b", ""),
+    (r"\bbhai\b", ""),
+    (r"\byaar\b", ""),
+    (r"\bkripya\b", "please"),
+    (r"\bmujhe batao\b", "tell me"),
+    (r"\bplease batao\b", "please explain"),
+    (r"\btheory\b", "theory"),
+    (r"\bdetail mein\b", "in detail"),
+    (r"\bvistaar se\b", "in detail"),
+    (r"\bsaral shabdon mein\b", "in simple terms"),
+    (r"\bhi\b", ""),
+]
+
+# RTU Subject synonym expansion
+RTU_SYNONYMS = {
+    "dsa": "data structures algorithms",
+    "data structure": "data structures algorithms DSA",
+    "ds": "data structures DSA",
+    "dbms": "database management system DBMS",
+    "database": "database management system DBMS",
+    "dccn": "data communication computer networks DCCN",
+    "computer networks": "data communication computer networks DCCN",
+    "cn": "computer networks DCCN",
+    "toc": "theory of computation automata TOC",
+    "automata": "theory of computation automata TOC",
+    "flat": "formal languages automata theory TOC",
+    "de": "digital electronics DE",
+    "digital electronics": "digital electronics DE",
+    "aem": "advanced engineering mathematics AEM",
+    "engineering mathematics": "advanced engineering mathematics AEM",
+    "maths": "mathematics AEM",
+    "os": "operating system OS",
+    "operating system": "operating system OS",
+    "se": "software engineering SE",
+    "software engineering": "software engineering SE",
+    "coa": "computer organization architecture COA",
+    "computer organization": "computer organization architecture COA",
+    "oops": "object oriented programming OOP",
+    "oop": "object oriented programming OOP",
+    "java": "java programming OOP",
+    "python": "python programming",
+    "c programming": "c language programming",
+    "microprocessor": "microprocessor microcontroller",
+}
+
+# Part marker patterns
+PART_A_RE = re.compile(r"\bpart\s*[-:]?\s*a\b|\bshort\s*questions?\b|\b2\s*marks?\b", re.I)
+PART_B_RE = re.compile(r"\bpart\s*[-:]?\s*b\b|\b6\s*marks?\b|\bmedium\s*answer\b", re.I)
+PART_C_RE = re.compile(r"\bpart\s*[-:]?\s*c\b|\b10\s*marks?\b|\blong\s*answer\b|\bdescribe\s+in\s+detail\b", re.I)
 
 try:
     from app.services.intent_service import SUBJECT_ALIASES
@@ -32,6 +101,40 @@ FOLLOW_UP_INDICATORS = [
 class ContextualQueryRewriter:
     def __init__(self):
         self.follow_up_regex = re.compile("|".join(FOLLOW_UP_INDICATORS), re.I)
+        self._hinglish_compiled = [
+            (re.compile(pat, re.I), repl) for pat, repl in HINGLISH_MAP
+        ]
+
+    def normalize_hinglish(self, query: str) -> str:
+        """Convert common Hinglish phrases to English equivalents."""
+        q = query
+        for pattern, replacement in self._hinglish_compiled:
+            q = pattern.sub(replacement, q)
+        # Normalize multiple spaces
+        q = re.sub(r"\s{2,}", " ", q).strip()
+        return q
+
+    def expand_synonyms(self, query: str) -> str:
+        """Expand RTU subject abbreviations/synonyms for better retrieval."""
+        q_lower = query.lower()
+        expansions = []
+        for term, expansion in RTU_SYNONYMS.items():
+            # Only expand if term appears as a standalone word
+            if re.search(rf"\b{re.escape(term)}\b", q_lower):
+                expansions.append(expansion)
+        if expansions:
+            return query + " " + " ".join(expansions)
+        return query
+
+    def detect_part_hint(self, query: str) -> Optional[str]:
+        """Return 'A', 'B', or 'C' if query contains a part hint, else None."""
+        if PART_C_RE.search(query):
+            return "C"
+        if PART_B_RE.search(query):
+            return "B"
+        if PART_A_RE.search(query):
+            return "A"
+        return None
 
     def is_follow_up(self, query: str) -> bool:
         """Checks if a student message is a follow-up query."""
@@ -105,9 +208,13 @@ class ContextualQueryRewriter:
     def rewrite_query(self, user_query: str, conversation_history: List[Dict[str, str]]) -> str:
         """
         Transforms a follow-up query into a standalone retrieval query using conversation context.
+        Also applies Hinglish normalization before rewriting.
         """
-        if not conversation_history or not self.is_follow_up(user_query):
-            return user_query
+        # Step 1: Normalize Hinglish
+        normalized = self.normalize_hinglish(user_query)
+
+        if not conversation_history or not self.is_follow_up(normalized):
+            return normalized
 
         ctx = self.extract_active_context(conversation_history)
 
@@ -137,6 +244,23 @@ class ContextualQueryRewriter:
     # Convenient alias
     def rewrite(self, user_query: str, conversation_history: List[Dict[str, str]]) -> str:
         return self.rewrite_query(user_query, conversation_history)
+
+    def rewrite_full(self, user_query: str, conversation_history: List[Dict[str, str]]) -> Dict[str, Any]:
+        """
+        Returns a dict with:
+          - query: the fully rewritten + synonym-expanded query for retrieval
+          - hint_part: detected Part A/B/C or None
+          - original: the original user_query unchanged
+        """
+        normalized = self.normalize_hinglish(user_query)
+        rewritten = self.rewrite_query(user_query, conversation_history)
+        expanded = self.expand_synonyms(rewritten)
+        hint_part = self.detect_part_hint(user_query)
+        return {
+            "query": expanded,
+            "hint_part": hint_part,
+            "original": user_query,
+        }
 
 # Convenient alias for class
 QueryRewriter = ContextualQueryRewriter

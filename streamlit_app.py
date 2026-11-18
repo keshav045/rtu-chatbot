@@ -7,6 +7,7 @@ Fully compatible with Streamlit Community Cloud (Self-Contained Embedded Engine)
 
 import os
 import sys
+import time
 from pathlib import Path
 from typing import Dict, Any, List, Optional, Tuple
 import pandas as pd
@@ -569,8 +570,21 @@ with col_subj:
         key="selector_subject",
         on_change=_sync_subject_change
     )
-    active_subject_code = subject_map.get(selected_subject_label, subject_options[0].split(" - ")[0] if subject_options else "DSA")
+    active_subject_code = subject_map.get(selected_subject_label, "DSA")
+    if not active_subject_code and subject_options:
+        active_subject_code = subject_options[0].split(" - ")[0].strip()
     st.session_state.active_subject_code = active_subject_code
+
+# Improvement 4: Sidebar paper count caption (added after subject is resolved)
+with st.sidebar:
+    _paper_count = None
+    if isinstance(curric_data, list):
+        for _s in curric_data:
+            if _s.get("short_name") == active_subject_code:
+                _paper_count = _s.get("paper_count")
+                break
+    if _paper_count is not None:
+        st.caption(f"{_paper_count} RTU past papers available for {active_subject_code}")
 
 st.markdown("---")
 
@@ -612,8 +626,17 @@ if st.session_state.selected_page == "Senior Tutor Chat":
         with st.chat_message(msg["role"]):
             st.markdown(msg["content"])
             if msg.get("citations") and len(msg["citations"]) > 0:
-                with st.expander(f"Verified RTU Paper Citations ({len(msg['citations'])})"):
-                    for c_idx, c in enumerate(msg["citations"]):
+                hist_citations = msg["citations"]
+                hist_years = [c.get("year") for c in hist_citations if c.get("year") and str(c.get("year")).isdigit()]
+                if hist_years:
+                    h_min = min(int(y) for y in hist_years)
+                    h_max = max(int(y) for y in hist_years)
+                    h_range = str(h_min) if h_min == h_max else f"{h_min}-{h_max}"
+                    hist_label = f"RTU Past Paper References ({len(hist_citations)} sources, {h_range})"
+                else:
+                    hist_label = f"RTU Past Paper References ({len(hist_citations)} sources)"
+                with st.expander(hist_label):
+                    for c_idx, c in enumerate(hist_citations):
                         st.markdown(
                             f"**{c_idx + 1}. {c.get('paper_name', 'RTU Past Paper')}** (Year: {c.get('year', '-')}) | "
                             f"*Question ID:* `{c.get('question_id', '-')}` | "
@@ -666,6 +689,7 @@ if st.session_state.selected_page == "Senior Tutor Chat":
                         "year": selected_year
                     }
                 }
+                _t0 = time.perf_counter()
                 res = api_post(
                     "/api/chat",
                     st.session_state.backend_mode,
@@ -673,19 +697,43 @@ if st.session_state.selected_page == "Senior Tutor Chat":
                     payload,
                     timeout=60
                 )
+                _t1 = time.perf_counter()
 
                 if "error" in res:
-                    error_msg = f"Connection error: {res['error']}. Please make sure your backend engine is running."
+                    err_text = res["error"]
+                    if "Connection" in err_text or "connection" in err_text:
+                        error_msg = "Backend is starting up. Please wait 10 seconds and try again."
+                    else:
+                        error_msg = f"Connection error: {err_text}. Please make sure your backend engine is running."
                     st.error(error_msg)
                     st.session_state.messages.append({"role": "assistant", "content": error_msg})
                 else:
-                    assistant_reply = res.get("response", "No response received.")
+                    assistant_reply = res.get("response", "")
+                    if not assistant_reply:
+                        assistant_reply = "No matching RTU past examination questions found for this topic. Try rephrasing with the subject name (e.g., 'DSA quicksort' or 'DBMS normalization')."
                     citations = res.get("citations", [])
                     st.session_state.session_id = res.get("session_id", st.session_state.session_id)
 
                     st.markdown(assistant_reply)
+
+                    # Improvement 2: Latency indicator
+                    latency_ms = res.get("latency_ms") or int((_t1 - _t0) * 1000)
+                    st.caption(f"Response time: {latency_ms} ms")
+
                     if citations:
-                        with st.expander(f"Verified RTU Paper Citations ({len(citations)})"):
+                        # Improvement 3: Citation count badge with year range
+                        citation_years = [c.get("year") for c in citations if c.get("year") and str(c.get("year")).isdigit()]
+                        if citation_years:
+                            min_yr = min(int(y) for y in citation_years)
+                            max_yr = max(int(y) for y in citation_years)
+                            if min_yr == max_yr:
+                                year_range = str(min_yr)
+                            else:
+                                year_range = f"{min_yr}-{max_yr}"
+                            expander_label = f"RTU Past Paper References ({len(citations)} sources, {year_range})"
+                        else:
+                            expander_label = f"RTU Past Paper References ({len(citations)} sources)"
+                        with st.expander(expander_label):
                             for idx, c in enumerate(citations):
                                 st.markdown(
                                     f"**{idx + 1}. {c.get('paper_name', 'RTU Past Paper')}** (Year: {c.get('year', '-')}) | "
