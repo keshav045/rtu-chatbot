@@ -152,3 +152,6 @@ class CrossEncoderReranker:
         except Exception as e:
             logger.warning(f"Reranking encountered error, falling back to RRF: {e}")
             return candidates[:top_k]
+
+# Backward-compatible alias
+Reranker = CrossEncoderReranker
