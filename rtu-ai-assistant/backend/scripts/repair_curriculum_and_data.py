@@ -330,6 +330,654 @@ CURRICULUM_SPEC = {
                 ]
             }
         ]
+    },
+    "OS": {
+        "name": "Operating Systems",
+        "code": "5CS4-03",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to Operating Systems",
+                "topics": [
+                    ("OS Overview, System Calls & Dual Mode", ["operating system", "os overview", "system call", "dual mode", "kernel", "trap", "monolithic", "microkernel", "pcb", "process control block"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Process Management & CPU Scheduling",
+                "topics": [
+                    ("CPU Scheduling: FCFS, SJF, RR & Priority", ["cpu scheduling", "fcfs", "sjf", "round robin", "priority scheduling", "turnaround time", "waiting time", "gantt chart", "multilevel queue"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Process Synchronization & Deadlocks",
+                "topics": [
+                    ("Critical Section, Semaphores & Synchronization", ["process synchronization", "critical section", "semaphore", "mutex", "peterson", "dining philosophers", "readers writers", "producer consumer"]),
+                    ("Deadlock: Prevention, Avoidance & Banker's Algorithm", ["deadlock", "deadlock prevention", "deadlock avoidance", "banker", "resource allocation graph", "safety algorithm", "deadlock detection"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Memory Management & Virtual Memory",
+                "topics": [
+                    ("Paging, Segmentation & Memory Allocation", ["memory management", "paging", "page table", "segmentation", "tlb", "fragmentation", "internal fragmentation", "external fragmentation"]),
+                    ("Virtual Memory & Page Replacement Algorithms", ["virtual memory", "demand paging", "page fault", "page replacement", "fifo", "lru", "optimal page", "belady anomaly", "thrashing"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Storage Management & File Systems",
+                "topics": [
+                    ("Disk Scheduling: FCFS, SSTF, SCAN & LOOK", ["disk scheduling", "sstf", "scan", "c-scan", "look", "c-look", "seek time", "rotational latency", "raid"]),
+                    ("File System Structure, Allocation & Free Space", ["file system", "file allocation", "contiguous allocation", "linked allocation", "indexed allocation", "inode", "directory structure"])
+                ]
+            }
+        ]
+    },
+    "DAA": {
+        "name": "Analysis of Algorithms",
+        "code": "5CS4-05",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Algorithm Analysis & Recurrences",
+                "topics": [
+                    ("Asymptotic Notations & Performance Analysis", ["asymptotic", "big o", "omega", "theta", "time complexity", "space complexity", "best case", "worst case"]),
+                    ("Recurrence Relations & Master Theorem", ["recurrence relation", "master theorem", "substitution method", "recursion tree", "divide and conquer"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Divide & Conquer and Greedy Algorithms",
+                "topics": [
+                    ("Divide and Conquer: Quick Sort, Merge Sort & Selection", ["divide and conquer", "merge sort", "quick sort", "median finding", "strassen"]),
+                    ("Greedy Method: Knapsack, Huffman & Job Sequencing", ["greedy method", "fractional knapsack", "huffman coding", "job sequencing", "optimal storage", "activity selection"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Dynamic Programming",
+                "topics": [
+                    ("Dynamic Programming: 0/1 Knapsack & LCS", ["dynamic programming", "0/1 knapsack", "longest common subsequence", "lcs", "optimal substructure", "overlapping subproblems"]),
+                    ("Matrix Chain Multiplication & All-Pairs Shortest Paths", ["matrix chain", "floyd warshall", "bellman ford", "travelling salesman", "tsp"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Backtracking & Branch and Bound",
+                "topics": [
+                    ("Backtracking: N-Queens, Subset Sum & Graph Coloring", ["backtracking", "n-queens", "subset sum", "graph coloring", "hamiltonian cycle", "state space tree"]),
+                    ("Branch and Bound: Assignment & 0/1 Knapsack", ["branch and bound", "fifo branch and bound", "lc branch and bound", "assignment problem"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: String Matching & NP-Completeness",
+                "topics": [
+                    ("String Matching: Naive, KMP & Rabin-Karp", ["string matching", "kmp", "knuth morris pratt", "rabin karp", "finite automata string"]),
+                    ("NP-Completeness: P, NP, NP-Hard & NP-Complete", ["p class", "np class", "np-complete", "np-hard", "cook theorem", "clique problem", "vertex cover", "polynomial time reduction"])
+                ]
+            }
+        ]
+    },
+    "CD": {
+        "name": "Compiler Design",
+        "code": "6CS4-01",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Lexical Analysis & Compiler Architecture",
+                "topics": [
+                    ("Phases of Compiler & Compiler-Compilers", ["phases of compiler", "compiler architecture", "lexical analyzer", "syntax analyzer", "semantic analyzer", "code generator", "compiler compiler"]),
+                    ("Lexical Analysis: Tokens, Lexemes & Regular Expressions", ["token", "lexeme", "input buffering", "regular expression for tokens", "transition diagram", "lex tool"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Syntax Analysis & Top-Down Parsing",
+                "topics": [
+                    ("Top-Down Parsing: LL(1) & Recursive Descent", ["top-down parsing", "recursive descent", "ll(1)", "first and follow", "predictive parser", "left recursion", "left factoring"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Bottom-Up Parsing",
+                "topics": [
+                    ("LR Parsing: Shift-Reduce, SLR(1), LR(0) & LALR(1)", ["bottom-up parsing", "shift reduce", "lr parsing", "lr(0)", "slr(1)", "clr(1)", "lalr(1)", "handle pruning", "operator precedence", "yacc"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Syntax-Directed Translation & Intermediate Code",
+                "topics": [
+                    ("Syntax-Directed Definitions & Translations", ["syntax directed", "s-attributed", "l-attributed", "annotated parse tree", "dependency graph"]),
+                    ("Intermediate Code Generation & 3-Address Code", ["intermediate code", "three address code", "quadruples", "triples", "syntax tree", "postfix notation"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Code Optimization & Code Generation",
+                "topics": [
+                    ("Code Optimization: Basic Blocks & Flow Graphs", ["code optimization", "basic block", "flow graph", "loop optimization", "dead code elimination", "constant folding", "peephole optimization", "dag"]),
+                    ("Code Generation & Register Allocation", ["code generation", "register allocation", "target machine", "instruction selection", "next use"])
+                ]
+            }
+        ]
+    },
+    "AI": {
+        "name": "Artificial Intelligence",
+        "code": "6CS4-03",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to AI & Search Techniques",
+                "topics": [
+                    ("AI Concepts, Agents & State Space Search", ["artificial intelligence", "intelligent agent", "turing test", "state space", "production system", "water jug", "8-puzzle"]),
+                    ("Heuristic Search: A*, AO*, Hill Climbing & Best-First", ["heuristic search", "best first search", "a* algorithm", "ao*", "hill climbing", "simulated annealing", "admissibility of a*"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Game Playing & Adversarial Search",
+                "topics": [
+                    ("Minimax Algorithm & Alpha-Beta Pruning", ["game playing", "minimax", "alpha-beta pruning", "adversarial search", "evaluation function", "tic tac toe", "chess"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Knowledge Representation & Logic",
+                "topics": [
+                    ("Propositional & Predicate Logic, Resolution & Unification", ["knowledge representation", "predicate logic", "fopl", "resolution", "unification", "wff", "clause form", "forward chaining", "backward chaining"]),
+                    ("Structured Knowledge: Semantic Nets, Frames & Ontologies", ["semantic net", "conceptual dependency", "script", "frame", "ontology"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Reasoning Under Uncertainty",
+                "topics": [
+                    ("Probabilistic Reasoning, Bayes Rule & Bayesian Networks", ["probabilistic reasoning", "bayes rule", "bayesian network", "certainty factor", "dempster shafer", "fuzzy logic", "fuzzy set"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Expert Systems & Natural Language Processing",
+                "topics": [
+                    ("Expert Systems Architecture & Knowledge Engineering", ["expert system", "knowledge base", "inference engine", "rule based system", "mycin"]),
+                    ("NLP Fundamentals & Machine Learning in AI", ["natural language processing", "nlp", "syntactic analysis", "parsing in nlp", "machine learning basics in ai"])
+                ]
+            }
+        ]
+    },
+    "CA": {
+        "name": "Computer Architecture and Organization",
+        "code": "6CS4-04",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Register Transfer & Basic Organization",
+                "topics": [
+                    ("Register Transfer Language, Bus & Memory Transfers", ["register transfer", "bus transfer", "three-state bus", "memory transfer", "instruction code", "stored program"]),
+                    ("Common Bus System & Computer Instructions", ["common bus", "computer register", "instruction cycle", "fetch and decode", "timing and control", "input-output configuration"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Microprogrammed Control & CPU Architecture",
+                "topics": [
+                    ("Control Memory, Address Sequencing & Microprogram Sequencer", ["control memory", "microprogrammed control", "hardwired control", "address sequencing", "microprogram sequencer", "mapping of instruction"]),
+                    ("CPU Organization, Addressing Modes & RISC vs CISC", ["general register organization", "stack organization", "addressing modes", "instruction formats", "risc vs cisc", "risc architecture"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Computer Arithmetic",
+                "topics": [
+                    ("Addition, Subtraction & Booth's Multiplication", ["computer arithmetic", "booth algorithm", "multiplication algorithm", "division algorithm", "restoring division", "non-restoring division", "floating-point arithmetic"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Memory Organization & Memory Hierarchy",
+                "topics": [
+                    ("Memory Hierarchy, Main Memory & Auxiliary Memory", ["memory hierarchy", "ram and rom", "auxiliary memory", "magnetic disk"]),
+                    ("Associative Memory, Cache Memory & Virtual Memory", ["associative memory", "cache memory", "cache mapping", "direct mapping", "associative mapping", "set-associative", "virtual memory", "page replacement in hardware"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: I/O Organization & Pipelining",
+                "topics": [
+                    ("Input-Output Interface, Asynchronous Data Transfer & DMA", ["i/o interface", "asynchronous transfer", "strobe control", "handshaking", "programmed i/o", "interrupt-driven i/o", "dma", "direct memory access"]),
+                    ("Pipelining: Arithmetic, Instruction & RISC Pipeline", ["pipelining", "instruction pipeline", "arithmetic pipeline", "pipeline hazards", "data hazards", "control hazards", "structural hazards", "vector processing"])
+                ]
+            }
+        ]
+    },
+    "ML": {
+        "name": "Machine Learning",
+        "code": "7CS4-02",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to Machine Learning",
+                "topics": [
+                    ("Machine Learning Foundations & Supervised vs Unsupervised", ["machine learning", "types of learning", "supervised learning", "unsupervised learning", "reinforcement learning", "hypothesis space", "inductive bias", "bias-variance"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Regression & Linear Models",
+                "topics": [
+                    ("Linear Regression, Gradient Descent & Regularization", ["linear regression", "multiple regression", "cost function", "gradient descent", "ridge regression", "lasso regression", "regularization", "logistic regression"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Classification Algorithms",
+                "topics": [
+                    ("Decision Trees, Random Forest & Naive Bayes", ["decision tree", "id3", "c4.5", "entropy", "information gain", "gini index", "pruning", "random forest", "naive bayes classifier", "bayesian classifier"]),
+                    ("Support Vector Machines (SVM) & Kernel Tricks", ["support vector machine", "svm", "hyperplane", "maximum margin", "kernel trick", "rbf kernel", "soft margin"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Clustering & Dimensionality Reduction",
+                "topics": [
+                    ("K-Means, Hierarchical Clustering & PCA", ["k-means", "hierarchical clustering", "agglomerative", "dendrogram", "pca", "principal component analysis", "dimensionality reduction", "lda"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Neural Networks & Ensemble Methods",
+                "topics": [
+                    ("Perceptron, Multilayer Perceptron & Backpropagation", ["perceptron", "multilayer perceptron", "backpropagation", "activation function", "sigmoid", "relu", "neural network"]),
+                    ("Ensemble Learning: Bagging, Boosting & Model Evaluation", ["ensemble learning", "bagging", "boosting", "adaboost", "confusion matrix", "precision", "recall", "f1-score", "roc-auc", "cross-validation"])
+                ]
+            }
+        ]
+    },
+    "CC": {
+        "name": "Cloud Computing",
+        "code": "6CS4-05",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to Cloud Computing",
+                "topics": [
+                    ("Cloud Architecture, NIST Model & Cloud Characteristics", ["cloud computing", "cloud architecture", "nist cloud", "essential characteristics", "on-demand self-service", "broad network access", "resource pooling"]),
+                    ("Cloud Service Models: IaaS, PaaS & SaaS", ["iaas", "paas", "saas", "infrastructure as a service", "platform as a service", "software as a service", "deployment models", "public cloud", "private cloud", "hybrid cloud"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Virtualization Technologies",
+                "topics": [
+                    ("Hypervisors, Hardware Virtualization & Containers", ["virtualization", "hypervisor", "type 1 hypervisor", "type 2 hypervisor", "full virtualization", "paravirtualization", "hardware assisted", "containerization", "docker", "vm migration"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Cloud Storage & Resource Management",
+                "topics": [
+                    ("Distributed Cloud Storage, S3 & Load Balancing", ["cloud storage", "distributed file system", "s3", "blob storage", "resource provisioning", "load balancing algorithms", "round robin cloud", "sla", "service level agreement"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Cloud Security & Privacy",
+                "topics": [
+                    ("Cloud Security Architecture, IAM & Multi-Tenancy", ["cloud security", "identity and access management", "iam", "multi-tenancy", "data protection in cloud", "encryption in cloud", "virtualization security"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Cloud Platforms & Future Trends",
+                "topics": [
+                    ("AWS, Azure, Google Cloud & Serverless Architecture", ["aws", "azure", "google cloud platform", "serverless", "faas", "microservices in cloud", "mapreduce in cloud", "hadoop in cloud"])
+                ]
+            }
+        ]
+    },
+    "BDA": {
+        "name": "Big Data Analytics",
+        "code": "7CS4-01",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Big Data Fundamentals & Hadoop",
+                "topics": [
+                    ("Big Data 5Vs & Hadoop Architecture (HDFS & YARN)", ["big data", "5vs", "volume velocity variety", "hadoop", "hadoop architecture", "hdfs", "namenode", "datanode", "secondary namenode", "yarn", "resourcemanager"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: MapReduce Programming Model",
+                "topics": [
+                    ("MapReduce Architecture: Mapper, Reducer & Combiner", ["mapreduce", "mapper", "reducer", "combiner", "partitioner", "shuffling and sorting", "word count in mapreduce", "data flow in mapreduce"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Hadoop Ecosystem Tools",
+                "topics": [
+                    ("Hive, Pig, Sqoop & NoSQL Databases", ["apache hive", "hiveql", "apache pig", "pig latin", "sqoop", "flume", "hbase", "nosql", "cap theorem", "column-oriented database"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Apache Spark & Real-Time Processing",
+                "topics": [
+                    ("Spark Architecture, RDDs & Spark Streaming", ["apache spark", "spark architecture", "rdd", "resilient distributed datasets", "spark dataframe", "spark sql", "spark streaming", "mllib"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Big Data Analytics & Mining",
+                "topics": [
+                    ("Clustering, Recommendation Systems & PageRank", ["recommendation system", "collaborative filtering", "content-based", "pagerank", "mining data streams", "bloom filter", "flajolet-martin"])
+                ]
+            }
+        ]
+    },
+    "IOT": {
+        "name": "Internet of Things",
+        "code": "7CS4-04",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to IoT & Architecture",
+                "topics": [
+                    ("IoT Definition, Characteristics & Architecture", ["internet of things", "iot architecture", "iot characteristics", "physical design of iot", "logical design of iot", "iot protocols", "sensors and actuators"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: IoT Networking & Communication Protocols",
+                "topics": [
+                    ("MQTT, CoAP, AMQP & Wireless IoT Technologies", ["mqtt", "coap", "amqp", "http vs mqtt", "zigbee", "bluetooth low energy", "ble", "lora", "lorawan", "6lowpan", "rfid"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Embedded IoT Platforms & Hardware",
+                "topics": [
+                    ("Arduino, Raspberry Pi & Sensor Interfacing", ["arduino", "raspberry pi", "esp8266", "esp32", "gpio", "adc in iot", "interfacing sensors", "actuator interfacing", "embedded linux"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Cloud & Edge Computing for IoT",
+                "topics": [
+                    ("IoT Cloud Platforms & Fog/Edge Analytics", ["iot cloud", "thingspeak", "aws iot core", "azure iot hub", "fog computing in iot", "edge analytics", "data collection in iot"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: IoT Security & Real-World Applications",
+                "topics": [
+                    ("IoT Security Challenges & Applications", ["iot security", "privacy in iot", "smart home", "smart city", "smart agriculture", "industrial iot", "iiot", "healthcare iot"])
+                ]
+            }
+        ]
+    },
+    "ISS": {
+        "name": "Information System Security",
+        "code": "7CS4-03",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Cryptography & Symmetric Ciphers",
+                "topics": [
+                    ("Classical Ciphers & DES/3DES", ["classical encryption", "caesar cipher", "playfair", "hill cipher", "feistel cipher", "des", "data encryption standard", "triple des", "3des", "aes", "advanced encryption standard", "modes of operation", "ecb", "cbc"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Asymmetric Cryptography & Key Distribution",
+                "topics": [
+                    ("RSA, Diffie-Hellman & Elliptic Curve Cryptography", ["asymmetric key", "public key cryptography", "rsa algorithm", "diffie hellman", "man in the middle", "elliptic curve", "ecc", "pki", "public key infrastructure", "digital certificate"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Hash Functions & Digital Signatures",
+                "topics": [
+                    ("Message Authentication Codes (MAC), SHA & Digital Signatures", ["message authentication", "mac", "hmac", "hash function", "sha-1", "sha-256", "md5", "digital signature", "dss", "digital signature standard"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Network & Transport Layer Security",
+                "topics": [
+                    ("IPsec, SSL/TLS & Email Security", ["ipsec", "ah", "esp", "transport mode", "tunnel mode", "ssl", "tls", "handshake protocol", "pgp", "pretty good privacy", "s/mime", "kerberos"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: System Security, Firewalls & Malware",
+                "topics": [
+                    ("Firewalls, IDS/IPS & Malicious Software", ["firewall", "packet filtering firewall", "circuit level gateway", "application proxy", "intrusion detection", "ids", "ips", "virus", "worm", "trojan horse", "denial of service", "dos", "ddos"])
+                ]
+            }
+        ]
+    },
+    "DM": {
+        "name": "Disaster Management",
+        "code": "8CS4-01",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to Disasters & Hazards",
+                "topics": [
+                    ("Disaster Concepts: Hazards, Vulnerability & Risk", ["disaster", "hazard", "vulnerability", "risk", "disaster management cycle", "natural disaster", "earthquake", "flood", "cyclone", "drought", "man-made disaster"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Disaster Preparedness & Mitigation",
+                "topics": [
+                    ("Preparedness Planning, Early Warning & Mitigation", ["disaster preparedness", "early warning system", "disaster mitigation", "structural mitigation", "non-structural mitigation", "community based disaster"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Disaster Response & Relief",
+                "topics": [
+                    ("Emergency Response, Search and Rescue & Relief", ["disaster response", "search and rescue", "evacuation", "emergency relief", "shelter", "incident command system", "medical aid in disaster"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Post-Disaster Recovery & Reconstruction",
+                "topics": [
+                    ("Damage Assessment, Rehabilitation & Reconstruction", ["damage assessment", "post disaster recovery", "rehabilitation", "reconstruction", "building back better", "psychosocial care"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Institutional Framework & Technology in Disaster",
+                "topics": [
+                    ("NDMA, NDRF, Disaster Management Act & GIS", ["ndma", "sdma", "ndrf", "disaster management act 2005", "remote sensing in disaster", "gis in disaster management", "role of armed forces in disaster"])
+                ]
+            }
+        ]
+    },
+    "DE": {
+        "name": "Digital Electronics",
+        "code": "3CS3-04",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Number Systems and Boolean Algebra",
+                "topics": [
+                    ("Number Systems, Binary Arithmetic & Codes", ["number systems", "binary", "octal", "hexadecimal", "1s complement", "2s complement", "bcd", "gray code", "excess-3", "ascii"]),
+                    ("Boolean Algebra, Logic Gates & De Morgan's Laws", ["boolean algebra", "logic gates", "and", "or", "not", "nand", "nor", "xor", "xnor", "universal gates", "de morgan", "boolean laws"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Combinational Logic Circuits & Minimization",
+                "topics": [
+                    ("Karnaugh Maps (K-Map) & Quine-McCluskey", ["k-map", "karnaugh map", "sop", "pos", "minterm", "maxterm", "dont care", "quine mccluskey", "tabular method"]),
+                    ("Adders, Subtractors & Code Converters", ["half adder", "full adder", "half subtractor", "full subtractor", "look ahead carry", "parallel adder", "code converter"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: MSI Combinational Devices",
+                "topics": [
+                    ("Multiplexers, Demultiplexers, Encoders & Decoders", ["multiplexer", "mux", "demultiplexer", "demux", "decoder", "encoder", "priority encoder", "seven segment decoder", "magnitude comparator"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Sequential Logic Circuits & Flip-Flops",
+                "topics": [
+                    ("Latches & Flip-Flops: SR, JK, D & T", ["latch", "flip-flop", "sr flip flop", "jk flip flop", "d flip flop", "t flip flop", "master slave jk", "race around condition", "excitation table", "characteristic equation"]),
+                    ("Counters: Synchronous & Asynchronous (Ripple)", ["counter", "ripple counter", "asynchronous counter", "synchronous counter", "mod-n counter", "up down counter", "ring counter", "johnson counter"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Shift Registers & Semiconductor Memories",
+                "topics": [
+                    ("Shift Registers & Register Modes (SISO, SIPO, PISO, PIPO)", ["shift register", "siso", "sipo", "piso", "pipo", "bidirectional shift register", "universal shift register"]),
+                    ("Semiconductor Memories & Programmable Logic (ROM, RAM, PLA, PAL)", ["semiconductor memory", "ram", "rom", "sram", "dram", "pla", "pal", "programmable logic array", "fpga"])
+                ]
+            }
+        ]
+    },
+    "MEFA": {
+        "name": "Managerial Economics and Financial Accounting",
+        "code": "3CS1-03",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Introduction to Managerial Economics",
+                "topics": [
+                    ("Managerial Economics: Scope, Significance & Circular Flow", ["managerial economics", "nature of managerial economics", "scope of managerial economics", "microeconomics vs macroeconomics", "circular flow of economic activity", "wealth"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Demand Analysis & Forecasting",
+                "topics": [
+                    ("Law of Demand, Elasticity of Demand & Demand Forecasting", ["law of demand", "elasticity of demand", "price elasticity", "income elasticity", "cross elasticity", "demand forecasting", "trend projection", "survey method"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Production, Cost & Market Structures",
+                "topics": [
+                    ("Production Function, Law of Returns & Cost Analysis", ["production function", "law of variable proportions", "returns to scale", "cobb douglas", "isoquant", "cost concepts", "fixed cost", "variable cost", "marginal cost", "break even analysis", "bep"]),
+                    ("Market Structures: Perfect Competition, Monopoly & Oligopoly", ["market structure", "perfect competition", "monopoly", "monopolistic competition", "oligopoly", "price determination", "kinked demand curve"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Financial Accounting & Balance Sheet",
+                "topics": [
+                    ("Accounting Principles, Journal, Ledger & Trial Balance", ["financial accounting", "gaap", "accounting concepts", "double entry system", "journal", "ledger", "trial balance", "depreciation"]),
+                    ("Final Accounts: Trading, Profit & Loss A/c & Balance Sheet", ["final accounts", "trading account", "profit and loss account", "balance sheet", "assets and liabilities", "working capital"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Financial Statement Analysis & Ratio Analysis",
+                "topics": [
+                    ("Ratio Analysis: Liquidity, Solvency & Profitability Ratios", ["ratio analysis", "liquidity ratio", "current ratio", "quick ratio", "solvency ratio", "debt equity ratio", "profitability ratio", "gross profit ratio", "net profit ratio", "funds flow", "cash flow statement"])
+                ]
+            }
+        ]
+    },
+    "CN": {
+        "name": "Computer Networks",
+        "code": "5CS4-01",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: Network Architectures & Layered Protocols",
+                "topics": [
+                    ("OSI Architecture, TCP/IP Suite & Network Topologies", ["computer networks", "osi reference model", "tcp/ip protocol suite", "network topologies", "packet switching vs circuit switching", "delays and throughput in networks"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: Data Link Layer & MAC Protocols",
+                "topics": [
+                    ("Error Detection, Flow Control & Sliding Window", ["data link layer", "error control", "crc", "sliding window protocols", "stop and wait arq", "go back n", "selective repeat arq"]),
+                    ("Ethernet, CSMA/CD & Wireless LANs (802.11)", ["mac sublayer", "aloha", "csma/cd", "ethernet standards", "fast ethernet", "gigabit ethernet", "wireless lan", "ieee 802.11", "bluetooth architecture"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: Network Layer & Routing Protocols",
+                "topics": [
+                    ("IPv4, IPv6 Addressing, Subnetting & CIDR", ["network layer", "ipv4 addressing", "ipv6 addressing", "subnetting", "subnet mask", "cidr", "nat", "arp", "icmp"]),
+                    ("Routing Protocols: RIP, OSPF, BGP & Distance Vector", ["routing algorithm", "distance vector routing", "link state routing", "rip", "ospf", "bgp", "hierarchical routing", "multicast routing"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: Transport Layer & Congestion Control",
+                "topics": [
+                    ("TCP, UDP, Port Numbers & 3-Way Handshake", ["transport layer", "tcp segment structure", "udp datagram", "three way handshake", "connection termination", "tcp flow control"]),
+                    ("TCP Congestion Control & Avoidance Algorithms", ["tcp congestion control", "slow start", "congestion avoidance", "fast retransmit", "fast recovery", "leaky bucket", "token bucket"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Application Layer Protocols & Network Security",
+                "topics": [
+                    ("DNS, HTTP, SMTP, FTP & DHCP", ["application layer", "dns resolution", "http 1.1 vs 2.0", "persistent http", "smtp architecture", "pop3", "imap", "ftp control and data", "dhcp"]),
+                    ("Network Security: Cryptography, Firewalls & IPsec", ["network security", "symmetric vs asymmetric encryption", "rsa", "digital signatures", "firewalls", "packet filtering", "ssl/tls", "ipsec architecture"])
+                ]
+            }
+        ]
+    },
+    "MI": {
+        "name": "Microprocessor and Interfaces",
+        "code": "5CS3-01",
+        "units": [
+            {
+                "unit_no": 1,
+                "title": "Unit 1: 8085 Microprocessor Architecture",
+                "topics": [
+                    ("8085 CPU Architecture, Registers & Pin Diagram", ["8085 microprocessor", "8085 architecture", "registers in 8085", "accumulator", "program counter", "stack pointer", "flag register", "pin configuration of 8085", "timing diagram of 8085", "machine cycle"])
+                ]
+            },
+            {
+                "unit_no": 2,
+                "title": "Unit 2: 8085 Instruction Set & Assembly Programming",
+                "topics": [
+                    ("8085 Instruction Set & Addressing Modes", ["8085 instruction set", "addressing modes of 8085", "data transfer instructions", "arithmetic instructions", "logical instructions", "branching instructions"]),
+                    ("Assembly Language Programming in 8085", ["assembly language programming", "8085 assembly", "subroutines", "stack operations in 8085", "delay calculation in 8085", "sorting in 8085"])
+                ]
+            },
+            {
+                "unit_no": 3,
+                "title": "Unit 3: 8086 Microprocessor Architecture",
+                "topics": [
+                    ("8086 CPU Architecture, BIU, EU & Segmentation", ["8086 microprocessor", "8086 architecture", "bus interface unit", "biu", "execution unit", "eu", "memory segmentation in 8086", "logical vs physical address", "flag register in 8086", "pin diagram of 8086", "minimum mode vs maximum mode"])
+                ]
+            },
+            {
+                "unit_no": 4,
+                "title": "Unit 4: 8086 Instruction Set & Addressing Modes",
+                "topics": [
+                    ("8086 Instruction Set & Assembler Directives", ["8086 instruction set", "addressing modes of 8086", "assembler directives", "assume", "db", "dw", "segment", "proc", "macro vs procedure in 8086", "string instructions in 8086"])
+                ]
+            },
+            {
+                "unit_no": 5,
+                "title": "Unit 5: Interfacing Peripheral Devices (8255, 8254, 8259, 8251)",
+                "topics": [
+                    ("Programmable Peripheral Interface 8255 & Counter 8254", ["8255 ppi", "programmable peripheral interface", "modes of 8255", "bsr mode", "8254 timer", "programmable interval timer", "modes of 8254"]),
+                    ("Interrupt Controller 8259, USART 8251 & DMA 8257", ["8259 pic", "programmable interrupt controller", "vector table", "usart 8251", "dma controller 8257", "adc and dac interfacing with 8085/8086", "stepper motor interfacing"])
+                ]
+            }
+        ]
     }
 }
 

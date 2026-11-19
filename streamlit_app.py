@@ -762,7 +762,7 @@ elif st.session_state.selected_page == "Crash Course Planner":
         generate_btn = st.button("Generate Roadmap", use_container_width=True, type="primary")
 
     st.subheader(f"Urgent Exam Revision Planner: {active_subject_code} (Year {selected_year})")
-    st.caption("Generate a customized, hour-by-hour revision plan based on real topic mark weightages from 14 years of RTU papers.")
+    st.caption("Generate a customized, hour-by-hour revision plan based on real topic mark weightages from verified RTU past exam papers.")
 
     if generate_btn:
         with st.spinner(f"Analyzing RTU paper frequency for {active_subject_code} across {hours_input} hours..."):
@@ -803,7 +803,7 @@ elif st.session_state.selected_page == "Crash Course Planner":
 # ------------------------------------------------------------------------------
 elif st.session_state.selected_page == "High-Yield Important Topics":
     st.subheader(f"High-Yield Important Topics: {active_subject_code} (Year {selected_year})")
-    st.caption("Topics ranked by marks weightage and frequency across 14 years of RTU examinations.")
+    st.caption("Topics ranked by marks weightage and frequency across verified RTU past examination papers.")
 
     with st.spinner(f"Fetching topic frequency data for {active_subject_code}..."):
         topics_data = api_get(
