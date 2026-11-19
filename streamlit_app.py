@@ -38,8 +38,7 @@ RTU_CURRICULUM = {
             ("BEE", "Basic Electrical Engineering"),
             ("CS-ENG", "Communication Skills"),
             ("EM-1", "Engineering Mathematics-I"),
-            ("PHY", "Engineering Physics"),
-            ("PPS", "Programming for Problem Solving")
+            ("PHY", "Engineering Physics")
         ],
         2: [
             ("BCE", "Basic Civil Engineering"),
@@ -247,10 +246,6 @@ SUBJECT_QUICK_STARTERS: Dict[str, List[Tuple[str, str]]] = {
     "POC": [
         ("AM & FM Modulation", "Compare Amplitude Modulation (AM) and Frequency Modulation (FM) with frequency spectra."),
         ("Sampling Theorem & Nyquist Rate", "State and prove Nyquist-Shannon sampling theorem with aliasing effect diagram.")
-    ],
-    "PPS": [
-        ("Pointers & Dynamic Memory in C", "Explain pointers, pointer arithmetic, and malloc/calloc in C with code examples."),
-        ("Recursion & Function Call Stack", "Explain recursion mechanism and stack frame execution with Fibonacci example in C.")
     ],
     "TC": [
         ("Technical Report Structure", "Explain formal structure, components, and format of technical reports for RTU exams."),
@@ -923,7 +918,7 @@ elif st.session_state.selected_page == "Practice Quiz & Evaluation":
 # PAGE 5: Past Papers Archive
 # ------------------------------------------------------------------------------
 elif st.session_state.selected_page == "Past Papers Archive":
-    st.subheader("Verified RTU Past Papers Archive (2012-2026)")
+    st.subheader("Verified RTU Past Papers Archive (2012-2024)")
     st.caption("Browse and review official Rajasthan Technical University semester examination papers.")
 
     with st.spinner("Loading papers catalog..."):

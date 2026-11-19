@@ -699,7 +699,7 @@ class ChatService:
 
             retrieval_start = time.perf_counter()
             if subj_paper_count == 0:
-                # Subject has 0 papers in database (e.g. PPS, PHY, CHEM, OS)
+                # Subject has 0 papers in database (e.g. PHY, CHEM, OS)
                 # DO NOT silently pull citations from unrelated subjects like OOP!
                 retrieval_res = {
                     "results": [],
@@ -738,14 +738,23 @@ class ChatService:
                 raw_citations = retrieval_res.get("citations", [])
 
                 # Strict subject isolation: never return citations from other subjects
-                retrieved_questions = [
-                    rq for rq in raw_questions
-                    if rq.get("subject_short") == target_subject or rq.get("subject") == target_subject
-                ] or raw_questions[:top_k]
-                citations_data = [
-                    c for c in raw_citations
-                    if c.get("subject") == target_subject or c.get("subject_short") == target_subject
-                ] or raw_citations[:top_k]
+                if target_subject:
+                    target_sub_clean = target_subject.replace("SUBJ_", "").strip().upper()
+                    retrieved_questions = [
+                        rq for rq in raw_questions
+                        if (rq.get("subject_short", "").upper() == target_sub_clean or
+                            rq.get("subject", "").upper() == target_sub_clean or
+                            rq.get("subject_id", "").upper() == f"SUBJ_{target_sub_clean}")
+                    ]
+                    citations_data = [
+                        c for c in raw_citations
+                        if (c.get("subject_short", "").upper() == target_sub_clean or
+                            c.get("subject", "").upper() == target_sub_clean or
+                            c.get("subject_id", "").upper() == f"SUBJ_{target_sub_clean}")
+                    ]
+                else:
+                    retrieved_questions = raw_questions[:top_k]
+                    citations_data = raw_citations[:top_k]
 
             # Improvement 3: Repeat question frequency detection
             # Count unique paper_ids and derive year range from retrieved questions

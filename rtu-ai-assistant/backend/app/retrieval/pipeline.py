@@ -190,9 +190,9 @@ class RetrievalPipeline:
             )
         ]
 
-        # Graceful fallback: If the strict subject filter yielded 0 candidates, search across all subjects
-        # (e.g. student is in DSA session but asks an OS, DBMS, or general engineering question)
-        if not filtered_dense and not filtered_sparse:
+        # If a specific subject is requested, DO NOT fallback across other subjects!
+        # Only fallback if NO subject filter was supplied or subject was 'all'
+        if not filtered_dense and not filtered_sparse and (not subject or subject.lower() == "all"):
             filtered_dense = [(qid, score) for qid, score in dense_results if qid in self.doc_store]
             filtered_sparse = [(qid, score) for qid, score in sparse_results if qid in self.doc_store]
 

@@ -126,8 +126,7 @@ SUBJECT_ALIASES = [
     ("mefa", "MEFA"),
     ("bee", "BEE"),
     ("bce", "BCE"),
-    ("bme", "BME"),
-    ("pps", "PPS")
+    ("bme", "BME")
 ]
 
 class IntentRouter:

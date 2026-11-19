@@ -37,11 +37,6 @@ CURRICULUM_DATA = [
         "branches": ["CSE", "IT", "ECE", "EE", "ME", "CE"]
     },
     {
-        "id": "SUBJ_PPS", "code": "1FY3-06", "short_name": "PPS",
-        "name": "Programming for Problem Solving (C)", "semester": 1, "tier": "Tier B",
-        "branches": ["CSE", "IT", "ECE", "EE", "ME", "CE"]
-    },
-    {
         "id": "SUBJ_BEE", "code": "1FY3-08", "short_name": "BEE",
         "name": "Basic Electrical Engineering", "semester": 1, "tier": "Tier B",
         "branches": ["CSE", "IT", "ECE", "EE", "ME", "CE"]
