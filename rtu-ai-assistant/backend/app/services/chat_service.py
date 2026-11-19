@@ -367,65 +367,32 @@ class ChatService:
         elif intent == IntentType.GREETING:
             citations_data = []
             retrieved_questions = []
-            llm = get_llm_provider(provider_type=provider_name) if provider_name else (self.default_llm_provider or get_llm_provider())
-            subj_obj = db.query(Subject).filter(
-                (Subject.short_name == target_subject) |
-                (Subject.id == f"SUBJ_{target_subject}") |
-                (Subject.code == target_subject)
-            ).first()
-            subj_title = subj_obj.name if subj_obj else target_subject
-
-            greeting_system_prompt = (
-                SENIOR_TUTOR_SYSTEM_PROMPT +
-                f"\nThe student sent a greeting: '{user_message}'. You are their friendly, supportive RTU Senior Tutor & Exam Coach. "
-                f"Respond genuinely, warmly, and naturally in clean English (or friendly Hinglish if they greet in Hindi like 'bhai' or 'kaise ho'). "
-                f"Acknowledge their greeting, briefly encourage them for their RTU exams, and ask what subject, topic, or question they want to prepare today. "
-                f"Keep it concise, natural, and friendly (1-2 sentences max). Do NOT assume or lock them into any specific subject name. Only reply in English or Hinglish. Do NOT output fake exam questions."
-            )
-            try:
-                raw_reply = llm.generate(
-                    user_prompt=user_message,
-                    retrieved_context="",
-                    chat_history=history_dicts,
-                    system_prompt=greeting_system_prompt
+            is_hinglish = language_pref == "hinglish" or any(w in user_message.lower() for w in ["bhai", "yaar", "namaste", "kya", "kaise", "haal", "ram ram", "pranam"])
+            if is_hinglish:
+                assistant_reply = (
+                    f"Arre hello junior! Kaisi chal rahi hai RTU exam ki taiyari? "
+                    f"Aaj **{target_subject}** ka kaunsa concept, algorithm, ya past year question solve karna hai? Poocho!"
                 )
-                clean_reply = re.sub(
-                    r'^(?:#+\s*|\*{1,2})?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student)(?:\s*[:\-]\s*|\s+)(?:Senior\s+Session|Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?)?(?:\*{1,2})?\s*[:\n\-]*\s*\n*',
-                    '',
-                    raw_reply,
-                    flags=re.IGNORECASE
-                ).strip()
-                assistant_reply = clean_reply or raw_reply
-            except Exception:
-                assistant_reply = "Hello! How is your RTU exam preparation going? Which subject, concept, or past paper question would you like to prepare today?"
+            else:
+                assistant_reply = (
+                    f"Hello! Welcome to your RTU Exam Prep session. How is your preparation going? "
+                    f"Which topic, algorithm, or past paper question from **{target_subject}** would you like to prepare today?"
+                )
 
         elif intent == IntentType.CLOSING:
             citations_data = []
             retrieved_questions = []
-            llm = get_llm_provider(provider_type=provider_name) if provider_name else (self.default_llm_provider or get_llm_provider())
-
-            closing_system_prompt = (
-                SENIOR_TUTOR_SYSTEM_PROMPT +
-                f"\nThe student said: '{user_message}'. You are their RTU Senior Tutor. "
-                f"Respond genuinely, warmly, and supportively. Remind them to keep practicing neat diagrams and step-by-step algorithms for their exams. "
-                f"Wish them the best of luck and let them know you are always here whenever they want to revise any topic or subject. Keep it concise (1-2 sentences max)."
-            )
-            try:
-                raw_reply = llm.generate(
-                    user_prompt=user_message,
-                    retrieved_context="",
-                    chat_history=history_dicts,
-                    system_prompt=closing_system_prompt
+            is_hinglish = language_pref == "hinglish" or any(w in user_message.lower() for w in ["bhai", "yaar", "dhanyawad", "shukriya", "alvida"])
+            if is_hinglish:
+                assistant_reply = (
+                    "Most welcome junior! Bas diagrams aur steps ache se practice karte raho. "
+                    "RTU exams ke liye best of luck, kabhi bhi koi doubt ho toh zaroor poochna!"
                 )
-                clean_reply = re.sub(
-                    r'^(?:#+\s*|\*{1,2})?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student)(?:\s*[:\-]\s*|\s+)(?:Senior\s+Session|Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?)?(?:\*{1,2})?\s*[:\n\-]*\s*\n*',
-                    '',
-                    raw_reply,
-                    flags=re.IGNORECASE
-                ).strip()
-                assistant_reply = clean_reply or raw_reply
-            except Exception:
-                assistant_reply = "You're welcome! Best of luck with your RTU exam preparation. Remember to draw clear diagrams and write step-by-step algorithms. Feel free to ask whenever you need help!"
+            else:
+                assistant_reply = (
+                    "You're very welcome! Keep practicing neat diagrams and step-by-step algorithms. "
+                    "Best of luck with your RTU exams, and feel free to ask anytime whenever you want to revise!"
+                )
 
         elif intent == IntentType.HELP_CAPABILITIES:
             citations_data = []
