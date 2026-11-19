@@ -1,17 +1,24 @@
 """
 Local Ollama LLM Provider for 8GB RAM Laptops
-Interacts with local Ollama service (default: qwen2.5:1.5b or qwen2.5:3b).
+Interacts with local Ollama service (default: qwen2.5:1.5b).
+Using base qwen2.5:1.5b (not the fine-tuned rtu-senior) because the 200-sample
+QLoRA fine-tune caused meta-rubric collapse. Base model + prompt engineering
+produces longer, accurate, code-rich answers.
 """
 
 import httpx
 from typing import List, Dict, Optional
 from .base import BaseLLMProvider, DEFAULT_SYSTEM_PROMPT
+from app.core.config import settings
 
 class OllamaProvider(BaseLLMProvider):
-    def __init__(self, base_url: str = "http://localhost:11434", model_name: str = "rtu-senior", timeout: float = 45.0):
+    def __init__(self, base_url: str = "http://localhost:11434", model_name: str = None, timeout: float = 60.0):
         self.base_url = base_url.rstrip("/")
-        self.model_name = model_name
+        # Default to config value (qwen2.5:1.5b) unless overridden
+        self.model_name = model_name or settings.OLLAMA_MODEL
         self.timeout = timeout
+        # num_ctx from config (4096); GTX 1650 handles 1.5B model at 4096 fine (~1.6 GB VRAM)
+        self.num_ctx = getattr(settings, "OLLAMA_NUM_CTX", 4096)
 
     def generate(
         self,
@@ -20,10 +27,10 @@ class OllamaProvider(BaseLLMProvider):
         chat_history: Optional[List[Dict[str, str]]] = None,
         system_prompt: str = DEFAULT_SYSTEM_PROMPT
     ) -> str:
-        # For lightweight local models (1.5B-3B), condense system prompt to prevent attention degradation and persona confusion
+        # Concise system prompt: prevents attention degradation on small 1.5B models
         concise_sys = (
             "You are the RTU Senior Academic Tutor and Exam Coach from Rajasthan Technical University. "
-            "Explain engineering concepts directly to the junior student in a structured, high-scoring exam format: "
+            "Explain engineering concepts directly to the junior student in a structured, high-scoring exam format:\n"
             "1. Technical Definition & Theoretical Basis\n"
             "2. Architecture / Diagram / Structure\n"
             "3. Step-by-Step Procedure, Algorithm, or Derivation\n"
@@ -57,7 +64,8 @@ class OllamaProvider(BaseLLMProvider):
                         "options": {
                             "temperature": 0.3,
                             "top_p": 0.9,
-                            "num_predict": 1024
+                            "num_predict": 1024,
+                            "num_ctx": self.num_ctx
                         }
                     }
                 )

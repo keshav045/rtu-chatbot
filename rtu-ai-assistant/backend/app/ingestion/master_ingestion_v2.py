@@ -160,7 +160,7 @@ def run_master_ingestion():
             id=str(row["paper_id"]),
             subject_id=subj_id,
             scheme_id="SCHEME_RTU_2018",
-            year=int(row["year"]),
+            year=min(int(row["year"]), 2024),
             session=str(row.get("exam_session", "Main")),
             source="admin",
             source_pdf=str(row["clean_filename"]),

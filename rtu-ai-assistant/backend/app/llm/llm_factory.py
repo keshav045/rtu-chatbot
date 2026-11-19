@@ -45,7 +45,7 @@ def get_llm_provider(
         return GeminiProvider(api_key=api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"), model=model_name or "gemini-1.5-flash")
 
     if choice == "ollama":
-        return OllamaProvider(base_url=ollama_url, model_name=model_name or "rtu-senior")
+        return OllamaProvider(base_url=ollama_url, model_name=model_name)
 
     if choice == "offline":
         return OfflineMentorProvider()
@@ -61,7 +61,7 @@ def get_llm_provider(
         return GeminiProvider()
 
     if is_ollama_online(ollama_url):
-        return OllamaProvider(base_url=ollama_url, model_name=model_name or "rtu-senior")
+        return OllamaProvider(base_url=ollama_url, model_name=model_name)
 
     # Safe deterministic offline mentor fallback
     return OfflineMentorProvider()

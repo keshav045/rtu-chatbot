@@ -679,7 +679,7 @@ if st.session_state.selected_page == "Senior Tutor Chat":
 
         # Generate Assistant Response
         with st.chat_message("assistant"):
-            with st.spinner(f"Reviewing 14 years of RTU archives for {active_subject_code} and preparing your answer..."):
+            with st.spinner(f"Searching 123 RTU past papers (2012-2024) for {active_subject_code} and preparing your answer..."):
                 payload = {
                     "message": prompt_to_send,
                     "session_id": st.session_state.session_id,

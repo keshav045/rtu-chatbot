@@ -161,6 +161,18 @@ class IntentRouter:
         if unit_match:
             entities["unit"] = int(unit_match.group(1))
 
+        # Extract exam paper part (e.g., "part c", "c part", "part b", "part a", "10 marks", "15 marks", "2 marks")
+        part_match = re.search(r'\b(?:part\s*([abc])|([abc])\s*part)\b', query, re.IGNORECASE)
+        if part_match:
+            p_letter = (part_match.group(1) or part_match.group(2)).upper()
+            entities["part"] = f"Part {p_letter}"
+        elif re.search(r'\b(?:10|15)\s*marks?\b', query, re.IGNORECASE):
+            entities["part"] = "Part C"
+        elif re.search(r'\b(?:6|8)\s*marks?\b', query, re.IGNORECASE):
+            entities["part"] = "Part B"
+        elif re.search(r'\b(?:2)\s*marks?\b', query, re.IGNORECASE):
+            entities["part"] = "Part A"
+
         return entities
 
     @staticmethod
@@ -193,9 +205,17 @@ class IntentRouter:
         if any(re.search(pat, q) for pat in security_patterns):
             return IntentType.SECURITY_VIOLATION
 
-        # 1. Greetings (e.g., "hi", "hello", "namaste", "kaise ho bhai", "good morning")
+        # 1. Greetings (e.g., "hi", "hello", "namaste", "how are you", "what's up", "how r u")
         if re.search(
-            r'^\s*(?:hi+|hey+|hello+|namaste|hola|yo|sup|kaise\s+ho|kaisa\s+hai|good\s+(?:morning|afternoon|evening))(?:\s+(?:sir|senior|tutor|bhai|bro|ji|yaar))?[!?.\s]*$',
+            r'^\s*(?:'
+            r'hi+|hey+|hello+|namaste|hola|yo|sup'
+            r'|kaise\s+ho|kaisa\s+hai'
+            r'|good\s+(?:morning|afternoon|evening)'
+            r'|how\s+(?:r|are)\s+(?:u|you)(?:\s+doing)?'
+            r"|what['\u2019]?s\s+up"
+            r'|wassup|whatsup'
+            r'|hru'
+            r')(?:\s+(?:sir|senior|tutor|bhai|bro|ji|yaar))?[!?.\s]*$',
             q
         ):
             return IntentType.GREETING
@@ -223,10 +243,14 @@ class IntentRouter:
         ):
             return IntentType.STUDY_PLAN
 
-        # 5. Topic Importance / High Weightage (e.g., "most important topics in dsa", "repeated questions")
-        if re.search(
-            r'\b(important\s+topics?|important\s+questions?|most\s+repeated|weightage|topic\s+ranking|high\s+yield|repeated\s+topics?|highest\s+marks)\b',
-            q
+        # 5. Topic Importance / High Weightage (e.g., "most important topics in dsa", "repeated questions", "c part k liye important")
+        if (
+            re.search(
+                r'\b(?:important\s+topics?|important\s+questions?|most\s+repeated|weightage|topic\s+ranking|high\s+yield|repeated\s+topics?|highest\s+marks|k(?:e|i)?\s+liye\s+important|important\s+(?:hai|batao|kya\s+hai|questions?|topics?)|sabse\s+important)\b',
+                q
+            )
+            or re.search(r'\b(?:part\s*[abc]|[abc]\s*part)\b.*\b(?:important|weightage|repeated|questions?|topics?)\b', q)
+            or re.search(r'\b(?:important|weightage|repeated)\b.*\b(?:part\s*[abc]|[abc]\s*part)\b', q)
         ):
             return IntentType.TOPIC_IMPORTANCE
 

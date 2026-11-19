@@ -401,7 +401,7 @@ class ChatService:
                 assistant_reply = (
                     "Haan junior, bilkul! Main aapki help ke liye hi hoon. Batao kis cheez mein help chahiye:\n\n"
                     "- Kisi topic ya algorithm ka **10-mark/2-mark exam answer** (definition, diagram, steps aur scoring tips ke saath).\n"
-                    "- Apne subject ke **most repeated / important topics** (14 saal ke RTU papers analysis ke mutabik).\n"
+                    "- Apne subject ke **most repeated / important topics** (123 RTU papers, 2012-2024, ke data-driven analysis ke mutabik).\n"
                     "- Ya exam se pehle ka **hour-by-hour crash study plan**.\n\n"
                     "Konsa topic ya subject prepare karna hai? Poocho!"
                 )
@@ -409,19 +409,19 @@ class ChatService:
                 assistant_reply = (
                     "I'm right here to help you! Tell me what you'd like assistance with:\n\n"
                     "- **10-Mark & 2-Mark Answers**: Complete RTU exam-standard structures with definitions, neat diagrams, step-by-step algorithms, and examiner scoring tips.\n"
-                    "- **Important Topics & PYQs**: High-yield repeated questions backed by 14 years of RTU past papers.\n"
+                    "- **Important Topics & PYQs**: High-yield repeated questions backed by 123 RTU past papers (2012-2024).\n"
                     "- **Crash Course Planning**: An hour-by-hour revision roadmap based on how much time you have left.\n\n"
                     "Which topic or subject would you like to prepare right now?"
                 )
 
         elif intent == IntentType.STUDY_PLAN:
-            if not detected_subject:
+            if not target_subject:
                 # Student has not stated a subject yet; ask politely without assuming DSA
                 hours_avail = entities.get("hours") or (session_obj.hours_left or 6.0)
                 citations_data = []
                 retrieved_questions = []
                 assistant_reply = (
-                    f"You have **{hours_avail:.0f} hours** left for your exam! I can create a customized, hour-by-hour crash course revision roadmap for you based on 14 years of RTU past question papers.\n\n"
+                    f"You have **{hours_avail:.0f} hours** left for your exam! I can create a customized, hour-by-hour crash course revision roadmap for you based on 123 verified RTU past papers spanning 2012 to 2024.\n\n"
                     f"Before I generate your schedule, **which subject is your exam for?**\n"
                     f"- **DSA** (Data Structures and Algorithms)\n"
                     f"- **DBMS** (Database Management Systems)\n"
@@ -473,7 +473,7 @@ class ChatService:
 
                 assistant_reply = (
                     f"### RTU {subj_title} ({target_subject}): {hours_avail:.0f}-Hour Crash Plan\n\n"
-                    f"Aapke pass exam se pehle **{hours_avail:.0f} hours** hain. 14 saal ke RTU past papers analysis ke mutabik in high-yield topics ko prioritize karo:\n\n"
+                    f"Aapke pass exam se pehle **{hours_avail:.0f} hours** hain. 123 RTU past papers (2012-2024) ke data-driven analysis ke mutabik in high-yield topics ko prioritize karo:\n\n"
                     f"#### High-Yield Important Topics to Prioritize:\n"
                     + "\n".join(topic_bullets) + "\n\n"
                     f"#### Hour-by-Hour Study Roadmap:\n"
@@ -487,11 +487,11 @@ class ChatService:
                 retrieved_questions = []
 
         elif intent == IntentType.TOPIC_IMPORTANCE:
-            if not detected_subject:
+            if not target_subject:
                 citations_data = []
                 retrieved_questions = []
                 assistant_reply = (
-                    "I can provide the most repeated, high-frequency topics ranked by 14 years of RTU past question papers!\n\n"
+                    "I can provide the most repeated, high-frequency topics ranked by 123 RTU past papers (2012-2024)!\n\n"
                     "Before I show the ranking, **which subject would you like to see important topics for?**\n"
                     "- **DSA** (Data Structures and Algorithms)\n"
                     "- **DBMS** (Database Management Systems)\n"
@@ -503,7 +503,6 @@ class ChatService:
                     "Just reply with your subject name, and I will share the topic weightage breakdown!"
                 )
             else:
-                target_subject = detected_subject
                 importance_svc = ImportanceService()
                 ranking_info = importance_svc.get_ranked_topics(db, target_subject)
                 subj_title = ranking_info.get("subject", target_subject)
@@ -515,21 +514,62 @@ class ChatService:
                         f"- **Rank {t.get('rank')}**: **{t.get('topic_name')}** (Unit {t.get('unit_no', '-')}) — **{t.get('total_marks', 0)} Marks** ({t.get('importance_level', 'High Priority')})"
                     )
 
-                assistant_reply = (
-                    f"### RTU {subj_title} ({target_subject}): High-Frequency Important Topics\n\n"
-                    f"14 saal ke RTU past question papers ke rigorous analysis ke mutabik, yeh topics sabse zyada marks yield karte hain:\n\n"
-                    + "\n".join(topic_rows) + "\n\n"
-                    f"#### RTU Paper Pattern Weightage Guide:\n"
-                    f"- **Part A (2 Marks Each)**: Short definitions, properties, and direct formula checks.\n"
-                    f"- **Part B (8 Marks Each)**: Detailed explanations with algorithms and step-by-step traces.\n"
-                    f"- **Part C (10/15 Marks Each)**: Comprehensive design, large trace trees/diagrams, and derivations.\n\n"
-                    f"Kisi bhi topic ka full 10-mark model answer chahiye toh topic ka naam poochho!"
-                )
+                target_part = entities.get("part")
+                if target_part:
+                    subj_obj = db.query(Subject).filter(
+                        (Subject.short_name == target_subject) |
+                        (Subject.id == f"SUBJ_{target_subject}") |
+                        (Subject.code == target_subject)
+                    ).first()
+                    part_filter = "Part C" if "c" in target_part.lower() else ("Part B" if "b" in target_part.lower() else "Part A")
+                    marks_thresh = 10 if part_filter == "Part C" else (6 if part_filter == "Part B" else 2)
+                    part_qs = []
+                    if subj_obj:
+                        part_qs = (
+                            db.query(Question, Paper.year, Paper.source_pdf)
+                            .join(Paper, Question.paper_id == Paper.id)
+                            .filter(Paper.subject_id == subj_obj.id)
+                            .filter((Question.part.ilike(f"%{part_filter}%")) | (Question.marks >= marks_thresh))
+                            .order_by(Paper.year.desc())
+                            .limit(6)
+                            .all()
+                        )
+                    if part_qs:
+                        q_bullets = []
+                        for q_rec, pyr, ppdf in part_qs:
+                            clean_t = (q_rec.text or "").strip()
+                            clean_t = re.sub(r'\s+', ' ', clean_t)
+                            q_bullets.append(f"- **[{q_rec.part or part_filter} | {q_rec.marks or marks_thresh} Marks] ({pyr})**: {clean_t[:160]}...")
+                        assistant_reply = (
+                            f"### RTU {subj_title} ({target_subject}): High-Yield {part_filter} Questions\n\n"
+                            f"RTU past examinations ke analysis ke mutabik, **{part_filter}** ke liye yeh questions aur topics high-scoring hain:\n\n"
+                            + "\n".join(q_bullets) + "\n\n"
+                            f"Kisi bhi question ka step-by-step 10-mark model answer chahiye toh poochho!"
+                        )
+                    else:
+                        assistant_reply = (
+                            f"### RTU {subj_title} ({target_subject}): {part_filter} Preparation\n\n"
+                            f"RTU exam pattern mein **{part_filter}** comprehensive, analytical aur design-oriented hota hai (10/15 marks each). "
+                            f"Is subject ke top high-frequency topics:\n\n"
+                            + "\n".join(topic_rows[:5]) + "\n\n"
+                            f"Kisi bhi topic ka full 10-mark model answer chahiye toh topic ka naam poochho!"
+                        )
+                else:
+                    assistant_reply = (
+                        f"### RTU {subj_title} ({target_subject}): High-Frequency Important Topics\n\n"
+                        f"123 RTU past papers (2012-2024) ke rigorous analysis ke mutabik, yeh topics sabse zyada marks yield karte hain:\n\n"
+                        + "\n".join(topic_rows) + "\n\n"
+                        f"#### RTU Paper Pattern Weightage Guide:\n"
+                        f"- **Part A (2 Marks Each)**: Short definitions, properties, and direct formula checks.\n"
+                        f"- **Part B (8 Marks Each)**: Detailed explanations with algorithms and step-by-step traces.\n"
+                        f"- **Part C (10/15 Marks Each)**: Comprehensive design, large trace trees/diagrams, and derivations.\n\n"
+                        f"Kisi bhi topic ka full 10-mark model answer chahiye toh topic ka naam poochho!"
+                    )
                 citations_data = []
                 retrieved_questions = []
 
         elif intent == IntentType.PAST_YEAR_QUESTIONS:
-            if not detected_subject:
+            if not target_subject:
                 citations_data = []
                 retrieved_questions = []
                 assistant_reply = (
@@ -545,7 +585,6 @@ class ChatService:
                     "Tell me your subject, and I will display the real RTU questions categorized by Part A (2 Marks), Part B (8 Marks), and Part C (15 Marks)!"
                 )
             else:
-                target_subject = detected_subject
                 subj_obj = db.query(Subject).filter(
                     (Subject.short_name == target_subject) |
                     (Subject.id == f"SUBJ_{target_subject}") |
@@ -665,7 +704,7 @@ class ChatService:
                 f"Great! Let's prepare **{subj_title} ({target_subject})** for your RTU exams.\n\n"
                 f"How would you like to proceed?\n"
                 f"- **10-Mark & 2-Mark Answers**: Ask for any concept or algorithm (e.g., definitions, neat diagrams, algorithms, and examiner scoring tips).\n"
-                f"- **High-Yield Important Topics**: Ask *'What are the most important topics in {target_subject}?'* to see the 14-year RTU frequency ranking.\n"
+                f"- **High-Yield Important Topics**: Ask *'What are the most important topics in {target_subject}?'* to see the data-driven RTU topic frequency ranking (based on 123 papers, 2012-2024).\n"
                 f"- **Crash Study Plan**: Tell me your time left (e.g., *'I have 6 hours left'*), and I will create an hour-by-hour revision plan.\n"
                 f"- **Past Year Questions**: Ask for *'past year questions'* to see verified questions from recent RTU papers.\n\n"
                 f"Which topic or question would you like to start with?"
@@ -790,11 +829,22 @@ class ChatService:
             if not is_unindexed_subject and top_score < threshold:
                 citations_data = []
                 retrieved_questions = []
-                subj_str = f" for {target_subject}" if detected_subject else ""
-                if language_pref == "hinglish" or any(w in user_message.lower() for w in ["kya", "hai", "kaise", "samjhao"]):
-                    assistant_reply = f"Arre junior, yeh topic RTU B.Tech ke official syllabus ya past papers mein{subj_str} nahi mil raha. Agar yeh aapke specific semester ka topic hai, toh kripya subject aur unit number batayein!"
+                if detected_subject:
+                    if language_pref == "hinglish" or any(w in user_message.lower() for w in ["kya", "hai", "kaise", "samjhao"]):
+                        assistant_reply = (
+                            f"Arre junior, '{user_message}' {target_subject} ke RTU syllabus ya past papers mein directly nahi mil raha. "
+                            f"Aap {target_subject} ka koi specific concept (jaise Normalization, SQL, Transactions, ER Modeling) pooch sakte hain, ya Part A/B/C ke important questions maang sakte hain!"
+                        )
+                    else:
+                        assistant_reply = (
+                            f"I searched the RTU syllabus and past question papers for {target_subject}, but could not find a close match for '{user_message}'. "
+                            f"Please ask about a specific {target_subject} topic or specify whether you want Part A (2-mark), Part B (8-mark), or Part C (15-mark) questions!"
+                        )
                 else:
-                    assistant_reply = f"I searched the RTU syllabus and past question papers{subj_str}, but could not find a close match for this topic. Please specify the subject (e.g., DSA, DBMS, DCCN, TOC, DE, AEM) or standard RTU question phrasing!"
+                    if language_pref == "hinglish" or any(w in user_message.lower() for w in ["kya", "hai", "kaise", "samjhao"]):
+                        assistant_reply = "Arre junior, yeh topic RTU B.Tech ke official syllabus ya past papers mein nahi mil raha. Kripya apna subject (jaise DSA, DBMS, DCCN, TOC, DE, AEM) batayein!"
+                    else:
+                        assistant_reply = "I searched the RTU syllabus and past question papers, but could not find a close match for this topic. Please specify the subject (e.g., DSA, DBMS, DCCN, TOC, DE, AEM) or standard RTU question phrasing!"
             else:
                 # LLM Synthesis with Senior Tutor System Prompt
                 llm = get_llm_provider(provider_type=provider_name) if provider_name else (self.default_llm_provider or get_llm_provider())

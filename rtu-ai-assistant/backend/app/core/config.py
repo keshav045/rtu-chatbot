@@ -42,12 +42,20 @@ class Settings(BaseSettings):
     HYBRID_CANDIDATE_K: int = 25
     FINAL_TOP_K: int = 5
     RRF_K: int = 60
-    OUT_OF_SCOPE_THRESHOLD: float = -9.5
+    # Citation threshold: only attach citations when top rerank score >= this value.
+    # -6.0 is the right cutoff for the ms-marco-MiniLM-L-6-v2 cross-encoder.
+    # Scores < -6.0 indicate the retrieved doc is not genuinely relevant to the query.
+    OUT_OF_SCOPE_THRESHOLD: float = -6.0
 
     # LLM Settings
     DEFAULT_LLM_PROVIDER: str = "ollama"  # 'ollama', 'groq', 'gemini', 'openai', 'offline'
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    OLLAMA_MODEL: str = "rtu-senior"
+    # Switched from fine-tuned rtu-senior to base qwen2.5:1.5b.
+    # The 200-sample QLoRA fine-tune caused meta-rubric collapse on the 1.5B model.
+    # Base qwen2.5:1.5b + prompt engineering produces longer, accurate, code-rich answers.
+    OLLAMA_MODEL: str = "qwen2.5:1.5b"
+    # num_ctx 4096: GTX 1650 (4 GB VRAM) handles qwen2.5:1.5b at 4096 comfortably (~1.6 GB).
+    OLLAMA_NUM_CTX: int = 4096
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
     GEMINI_MODEL: str = "gemini-1.5-flash"
     OPENAI_MODEL: str = "gpt-4o-mini"
