@@ -30,8 +30,14 @@ Core Responsibilities:
    - Concrete Working Example with traced values
    - Time and Space Complexity (in Big-O notation where applicable)
    - RTU Examiner Scoring Tip (actionable guidance on how examiners award 8 to 15 marks)
-2. Grade student answers honestly with constructive feedback against official RTU evaluation criteria.
+2. Guide junior students on how to structure and present high-scoring answers following official RTU evaluation criteria.
 3. Strictly refuse out-of-syllabus or non-academic topics.
+
+Identity & Output Formatting Rules:
+- YOU ARE THE SENIOR TUTOR. Speak directly to the junior student in an encouraging, knowledgeable senior voice.
+- NEVER start your response with "Student Answer:", "Student:", "Tutor Answer:", or "Sample Answer:".
+- Do not simulate a student's answer or grade yourself; provide your comprehensive, authoritative tutorial response directly to the student.
+- Always provide the full technical solution yourself.
 
 RTU Exam Format Rules:
 - For 10-mark Part C questions: Use the RTU 10-mark format - Introduction (2 marks), Core explanation with labeled diagram or algorithm (5 marks), Numerical example or application (2 marks), Conclusion/Comparison table (1 mark).
@@ -716,22 +722,63 @@ class ChatService:
             # IntentType.EXAM_QUESTION: Full Grounded Conversational RAG Turn
             rewritten_query = self.query_rewriter.rewrite(user_message, history_dicts)
 
-            retrieval_start = time.perf_counter()
-            retrieval_res = self.pipeline.retrieve(
-                query=rewritten_query,
-                subject=target_subject if detected_subject else None,
-                semester=filter_kwargs.get("semester"),
-                year_from=filter_kwargs.get("year_from"),
-                year_to=filter_kwargs.get("year_to"),
-                section=filter_kwargs.get("section"),
-                marks=filter_kwargs.get("marks"),
-                top_k=top_k
-            )
-            retrieval_latency_ms = round((time.perf_counter() - retrieval_start) * 1000, 2)
+            # Check if target_subject has actual past papers in DB
+            target_subj_obj = db.query(Subject).filter(
+                (Subject.short_name == target_subject) |
+                (Subject.id == f"SUBJ_{target_subject}") |
+                (Subject.code == target_subject)
+            ).first()
+            subj_paper_count = len(target_subj_obj.papers) if target_subj_obj else 0
 
-            context_string = retrieval_res.get("context_string", "")
-            retrieved_questions = retrieval_res.get("results", [])
-            citations_data = retrieval_res.get("citations", [])
+            retrieval_start = time.perf_counter()
+            if subj_paper_count == 0:
+                # Subject has 0 papers in database (e.g. PPS, PHY, CHEM, OS)
+                # DO NOT silently pull citations from unrelated subjects like OOP!
+                retrieval_res = {
+                    "results": [],
+                    "citations": [],
+                    "context_string": "",
+                    "retrieval_stats": {
+                        "subject": target_subject,
+                        "papers_in_db": 0,
+                        "status": "NO_PAPERS_INDEXED_FOR_SUBJECT"
+                    }
+                }
+                retrieval_latency_ms = 0.0
+                full_subj_name = target_subj_obj.name if target_subj_obj else target_subject
+                context_string = (
+                    f"NOTE FOR SENIOR TUTOR: Official RTU past examination papers for {target_subject} "
+                    f"({full_subj_name}) are not yet compiled in the local database. "
+                    f"Explain this concept thoroughly according to standard RTU B.Tech syllabus and marking scheme, "
+                    f"without fabricating past year questions or citing questions from other subjects."
+                )
+                retrieved_questions = []
+                citations_data = []
+            else:
+                retrieval_res = self.pipeline.retrieve(
+                    query=rewritten_query,
+                    subject=target_subject,
+                    semester=filter_kwargs.get("semester"),
+                    year_from=filter_kwargs.get("year_from"),
+                    year_to=filter_kwargs.get("year_to"),
+                    section=filter_kwargs.get("section"),
+                    marks=filter_kwargs.get("marks"),
+                    top_k=top_k
+                )
+                retrieval_latency_ms = round((time.perf_counter() - retrieval_start) * 1000, 2)
+                context_string = retrieval_res.get("context_string", "")
+                raw_questions = retrieval_res.get("results", [])
+                raw_citations = retrieval_res.get("citations", [])
+
+                # Strict subject isolation: never return citations from other subjects
+                retrieved_questions = [
+                    rq for rq in raw_questions
+                    if rq.get("subject_short") == target_subject or rq.get("subject") == target_subject
+                ] or raw_questions[:top_k]
+                citations_data = [
+                    c for c in raw_citations
+                    if c.get("subject") == target_subject or c.get("subject_short") == target_subject
+                ] or raw_citations[:top_k]
 
             # Improvement 3: Repeat question frequency detection
             # Count unique paper_ids and derive year range from retrieved questions
@@ -759,10 +806,12 @@ class ChatService:
                 )
                 context_string = context_string + freq_note if context_string else freq_note
 
-            # Zero-Hallucination Guardrail: scores below threshold denote ungrounded / out-of-syllabus queries
+            # Check if this subject simply has no papers in DB vs genuine out-of-syllabus query
+            is_unindexed_subject = (subj_paper_count == 0)
             threshold = getattr(settings, "OUT_OF_SCOPE_THRESHOLD", -6.0)
             top_score = retrieved_questions[0].get("rerank_score", 0.0) if retrieved_questions else -999.0
-            if top_score < threshold:
+
+            if not is_unindexed_subject and top_score < threshold:
                 citations_data = []
                 retrieved_questions = []
                 subj_str = f" for {target_subject}" if detected_subject else ""
@@ -775,6 +824,13 @@ class ChatService:
                 llm = get_llm_provider(provider_type=provider_name) if provider_name else (self.default_llm_provider or get_llm_provider())
                 
                 system_prompt = SENIOR_TUTOR_SYSTEM_PROMPT
+                if is_unindexed_subject:
+                    system_prompt += (
+                        f"\nImportant Context: Past examination papers for {target_subject} "
+                        f"({full_subj_name}) are not yet compiled in the local database. "
+                        f"Provide a clear, high-scoring tutorial explanation based on standard RTU engineering syllabus concepts. "
+                        f"Do not fabricate past exam citations or question numbers."
+                    )
                 if session_obj:
                     system_prompt += (
                         f"\nStudent Context: Year {session_obj.year or 2}, {session_obj.branch or 'CSE'}. "
@@ -804,14 +860,27 @@ class ChatService:
                     system_prompt=system_prompt
                 )
 
-                # Clean role prefixes and unwanted 'Student:' or 'Senior Tutor:' labels
+                # Clean role prefixes and unwanted 'Student Answer:', 'Student:', or 'Senior Tutor:' labels
+                clean_reply = assistant_reply
+                # If model simulated a dialogue starting with student turn before tutor response
+                if re.search(r'(?:###?\s*Tutor\s*(?:Response|Answer)|(?:Tutor|Senior\s+Tutor)\s*:)', clean_reply, re.IGNORECASE):
+                    parts = re.split(r'(?:###?\s*Tutor\s*(?:Response|Answer)[^\n]*|(?:Tutor|Senior\s+Tutor)\s*:\s*)', clean_reply, flags=re.IGNORECASE, maxsplit=1)
+                    if len(parts) > 1 and parts[1].strip():
+                        clean_reply = parts[1].strip()
+                # Strip leading Student Answer or Tutor Answer labels
                 clean_reply = re.sub(
-                    r'^(?:#+\s*|\*{1,2})?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student)(?:\s*(?:Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?))?(?:\*{1,2})?\s*[:\n\-]*\s*(?:Past\s+Year\s+Questions?[:\n\-]*)?\s*\n*',
+                    r'^(?:\*{1,2}|#+\s*)?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student|Sample)(?:\s*(?:Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?))?(?:\*{1,2})?\s*[:\n\-]+\s*',
                     '',
-                    assistant_reply,
+                    clean_reply,
                     flags=re.IGNORECASE
                 ).strip()
+                # Extra pass for standalone Student Answer label
+                clean_reply = re.sub(r'^(?:\*{1,2}|#+\s*)?Student\s+Answer(?:\*{1,2})?\s*[:\n\-]+\s*', '', clean_reply, flags=re.IGNORECASE).strip()
                 assistant_reply = clean_reply or assistant_reply
+
+                if is_unindexed_subject:
+                    note = f"*Note: Past RTU examination papers for **{target_subject}** ({full_subj_name}) are currently being compiled into the question archive. Here is the tutorial explanation based on the RTU B.Tech syllabus:*\n\n"
+                    assistant_reply = note + assistant_reply
 
         # Post-Generation Safety and Anti-Leakage Sanitization
         assistant_reply = self.sanitize_response(assistant_reply)

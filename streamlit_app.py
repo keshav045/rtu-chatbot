@@ -530,7 +530,9 @@ subject_map: Dict[str, str] = {}
 
 if isinstance(curric_data, list) and len(curric_data) > 0:
     for s in curric_data:
-        lbl = f"{s.get('short_name', '')} - {s.get('name', '')}"
+        p_cnt = s.get("paper_count", 0)
+        status_tag = f"({p_cnt} papers)" if p_cnt > 0 else "(0 papers - Ingestion Pending)"
+        lbl = f"{s.get('short_name', '')} - {s.get('name', '')} {status_tag}"
         subject_options.append(lbl)
         subject_map[lbl] = s.get("short_name", "")
 else:
@@ -541,7 +543,7 @@ else:
             if int_sem is None or sem_no == int_sem:
                 fallback_subjects.extend(s_list)
     for s_code, s_name in fallback_subjects:
-        lbl = f"{s_code} - {s_name}"
+        lbl = f"{s_code} - {s_name} (0 papers - Ingestion Pending)"
         subject_options.append(lbl)
         subject_map[lbl] = s_code
 
@@ -628,13 +630,16 @@ if st.session_state.selected_page == "Senior Tutor Chat":
             if msg.get("citations") and len(msg["citations"]) > 0:
                 hist_citations = msg["citations"]
                 hist_years = [c.get("year") for c in hist_citations if c.get("year") and str(c.get("year")).isdigit()]
+                h_pids = set(c.get("source_pdf") or c.get("paper_id") for c in hist_citations if (c.get("source_pdf") or c.get("paper_id")))
+                h_src_cnt = len(h_pids)
+                h_paper_str = f"{len(hist_citations)} questions from {h_src_cnt} {'paper' if h_src_cnt == 1 else 'papers'}"
                 if hist_years:
                     h_min = min(int(y) for y in hist_years)
                     h_max = max(int(y) for y in hist_years)
                     h_range = str(h_min) if h_min == h_max else f"{h_min}-{h_max}"
-                    hist_label = f"RTU Past Paper References ({len(hist_citations)} sources, {h_range})"
+                    hist_label = f"RTU Past Paper References ({h_paper_str}, {h_range})"
                 else:
-                    hist_label = f"RTU Past Paper References ({len(hist_citations)} sources)"
+                    hist_label = f"RTU Past Paper References ({h_paper_str})"
                 with st.expander(hist_label):
                     for c_idx, c in enumerate(hist_citations):
                         st.markdown(
@@ -721,18 +726,18 @@ if st.session_state.selected_page == "Senior Tutor Chat":
                     st.caption(f"Response time: {latency_ms} ms")
 
                     if citations:
-                        # Improvement 3: Citation count badge with year range
+                        # Citation count badge with real source paper count and year range
                         citation_years = [c.get("year") for c in citations if c.get("year") and str(c.get("year")).isdigit()]
+                        pids = set(c.get("source_pdf") or c.get("paper_id") for c in citations if (c.get("source_pdf") or c.get("paper_id")))
+                        src_cnt = len(pids)
+                        paper_str = f"{len(citations)} questions from {src_cnt} {'paper' if src_cnt == 1 else 'papers'}"
                         if citation_years:
                             min_yr = min(int(y) for y in citation_years)
                             max_yr = max(int(y) for y in citation_years)
-                            if min_yr == max_yr:
-                                year_range = str(min_yr)
-                            else:
-                                year_range = f"{min_yr}-{max_yr}"
-                            expander_label = f"RTU Past Paper References ({len(citations)} sources, {year_range})"
+                            year_range = str(min_yr) if min_yr == max_yr else f"{min_yr}-{max_yr}"
+                            expander_label = f"RTU Past Paper References ({paper_str}, {year_range})"
                         else:
-                            expander_label = f"RTU Past Paper References ({len(citations)} sources)"
+                            expander_label = f"RTU Past Paper References ({paper_str})"
                         with st.expander(expander_label):
                             for idx, c in enumerate(citations):
                                 st.markdown(
