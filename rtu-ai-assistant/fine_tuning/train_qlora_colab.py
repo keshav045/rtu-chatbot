@@ -402,23 +402,11 @@ def merge_and_save(args: argparse.Namespace, tokenizer: AutoTokenizer):
 
     # Load and attach LoRA adapter
     print("  Attaching LoRA adapter ...")
-    try:
-        peft_model = PeftModel.from_pretrained(
-            base_model,
-            args.output_dir,
-            torch_dtype=torch.float16,
-        )
-    except ImportError as e:
-        if "torchao" in str(e):
-            print("  Detected torchao version incompatibility. Falling back to AutoPeftModelForCausalLM...")
-            from peft import AutoPeftModelForCausalLM
-            peft_model = AutoPeftModelForCausalLM.from_pretrained(
-                args.output_dir,
-                device_map="cpu",
-                torch_dtype=torch.float16,
-            )
-        else:
-            raise e
+    peft_model = PeftModel.from_pretrained(
+        base_model,
+        args.output_dir,
+        torch_dtype=torch.float16,
+    )
 
     # Merge adapter weights into base model and unload adapter scaffolding
     print("  Merging weights ...")
