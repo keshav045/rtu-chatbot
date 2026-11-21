@@ -1,4 +1,4 @@
-FROM ./rtu_senior_tutor_q4.gguf
+FROM ./rtu_senior_tutor_q8.gguf
 
 TEMPLATE """<|im_start|>system
 {{ .System }}<|im_end|>
@@ -13,5 +13,4 @@ PARAMETER temperature 0.3
 PARAMETER top_p 0.9
 PARAMETER stop "<|im_end|>"
 PARAMETER stop "<|im_start|>"
-PARAMETER num_ctx 2048
-
+PARAMETER num_ctx 4096
