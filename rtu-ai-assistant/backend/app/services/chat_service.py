@@ -188,7 +188,8 @@ class ChatService:
         year: int = 2,
         hours_left: float = 5.0,
         mode: str = "explain_topic",
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        session_id: Optional[str] = None
     ) -> SessionModel:
         # Resolve real Subject.id foreign key (e.g. 'DSA' -> 'SUBJ_DSA')
         resolved_subject_id = None
@@ -202,9 +203,9 @@ class ChatService:
             if s_rec:
                 resolved_subject_id = s_rec.id
 
-        session_id = f"sess_{uuid.uuid4().hex[:12]}"
+        sid = session_id or f"sess_{uuid.uuid4().hex[:12]}"
         new_session = SessionModel(
-            id=session_id,
+            id=sid,
             user_id=user_id,
             subject_id=resolved_subject_id,
             branch=branch,
@@ -274,6 +275,7 @@ class ChatService:
         if not session_obj:
             session_obj = self.create_session(
                 db=db,
+                session_id=actual_session_id,
                 subject_id=subject_filter,
                 mode=mode or "explain_topic",
                 user_id=user_id

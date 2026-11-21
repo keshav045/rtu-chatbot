@@ -70,7 +70,7 @@ from peft import LoraConfig, prepare_model_for_kbit_training
 # ==============================================================================
 
 DEFAULT_BASE_MODEL  = "Qwen/Qwen2.5-1.5B-Instruct"
-DEFAULT_DATASET     = "seed_dataset_200.jsonl"
+DEFAULT_DATASET     = "rtu_train_dataset_expanded.jsonl" if Path("rtu_train_dataset_expanded.jsonl").exists() or (Path(__file__).parent / "rtu_train_dataset_expanded.jsonl").exists() else "seed_dataset_200.jsonl"
 DEFAULT_LORA_DIR    = "./rtu_lora_adapter"
 DEFAULT_MERGED_DIR  = "./rtu_merged_model"
 DEFAULT_EPOCHS      = 3
@@ -240,13 +240,26 @@ def load_and_format_dataset(dataset_path: str, tokenizer: AutoTokenizer):
     """
     print(f"\n[4/5] Loading dataset from: {dataset_path}")
 
-    if not Path(dataset_path).exists():
-        raise FileNotFoundError(
-            f"Dataset not found: {dataset_path}\n"
-            "Please upload seed_dataset_200.jsonl to the same directory."
-        )
+    actual_path = Path(dataset_path)
+    if not actual_path.exists():
+        script_relative = Path(__file__).parent / dataset_path
+        if script_relative.exists():
+            actual_path = script_relative
+        else:
+            fallback = Path(__file__).parent / "rtu_train_dataset_expanded.jsonl"
+            if fallback.exists():
+                actual_path = fallback
+            else:
+                fallback_seed = Path(__file__).parent / "seed_dataset_200.jsonl"
+                if fallback_seed.exists():
+                    actual_path = fallback_seed
+                else:
+                    raise FileNotFoundError(
+                        f"Dataset not found at: {dataset_path} or {script_relative}\n"
+                        "Please ensure rtu_train_dataset_expanded.jsonl is present."
+                    )
 
-    raw = load_dataset("json", data_files=dataset_path, split="train")
+    raw = load_dataset("json", data_files=str(actual_path), split="train")
     print(f"      Raw examples  : {len(raw)}")
 
     def apply_chat_template(example):
