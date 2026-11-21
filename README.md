@@ -31,7 +31,7 @@ The system is deployed live on Hugging Face Spaces backed by dynamic **NVIDIA A1
 
 Preparing for university engineering exams usually requires searching through dozens of past-year question papers (PYQs), estimating repeated question frequency, and aligning responses with university scoring expectations.
 
-**RTU AI Academic Assistant** converts 14 years of RTU past question papers and syllabus archives into a verified academic study companion:
+**RTU AI Academic Assistant** converts 724 RTU past question papers (2010-2024) and comprehensive syllabus archives into a verified academic study companion:
 1. **Senior Tutor Exam Assistant**: Natural English and Hinglish conversational tutor providing exam-oriented responses (Definitions, Block Diagrams, Algorithmic Steps, Working Examples, and RTU Scoring Tips).
 2. **Verifiable Paper Citations**: Every answer links directly to authentic RTU question papers with subject code, year, section, marks, and physical PDF page numbers.
 3. **High-Yield Topic Rankings**: Empirical question frequency analysis identifying high-weightage topics across past examinations.
@@ -83,18 +83,12 @@ User Query (English / Hinglish)
 
 ## Core Engineering Subjects Covered
 
-* **DSA**: Data Structures and Algorithms (`3CS4-05` / `3E1202`)
-* **DBMS**: Database Management System (`4CS4-05`)
-* **DCCN**: Data Communication and Computer Networks (`4CS4-07`)
-* **OOP**: Object Oriented Programming in C++ (`3CS4-06`)
-* **DE**: Digital Electronics (`3CS3-04`)
-* **AEM**: Advanced Engineering Mathematics (`3CS2-01`)
-* **TOC**: Theory of Computation (`4CS4-06`)
-* **SE**: Software Engineering (`3CS4-07`)
-* **DMS**: Discrete Mathematics Structure (`4CS2-01`)
-* **MEFA**: Managerial Economics and Financial Accounting (`3CS1-03`)
-* **MI**: Microprocessor and Interfaces (`5CS3-01`)
-* **TC**: Technical Communication (`4CS1-02`)
+* **Semester 3**: DSA, OOP (C++), DE, AEM, SE, MEFA
+* **Semester 4**: DBMS, TOC, DCCN, DMS, TC, POC
+* **Semester 5**: OS, DAA, CN, MI, ITC
+* **Semester 6**: AI, CD, CC, CG, CA
+* **Semester 7**: BDA, ML, ISS, IOT
+* **Semester 8**: DS, DIP, DM, MC, RTS
 
 ---
 
