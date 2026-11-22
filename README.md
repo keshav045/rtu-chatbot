@@ -6,119 +6,310 @@ app_file: app.py
 pinned: false
 ---
 
-# RTU AI Academic Assistant
-> An AI-powered exam coach and past-paper intelligence platform designed specifically for Rajasthan Technical University (RTU) B.Tech students.
+# RTU AI Academic Assistant: The Senior Tutor Exam Coach
+
+> An offline-first, past-paper-grounded AI academic coach built specifically for Rajasthan Technical University (RTU) B.Tech engineering students.
 
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Hugging%20Face%20ZeroGPU-blue.svg)](https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant)
-[![Gradio](https://img.shields.io/badge/UI-Gradio-orange.svg)](https://gradio.app/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
+[![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg)](https://streamlit.io/)
 [![FAISS](https://img.shields.io/badge/Vector%20Search-FAISS-0468D7.svg)](https://github.com/facebookresearch/faiss)
 [![BM25](https://img.shields.io/badge/Keyword%20Search-BM25Okapi-FF6F00.svg)](https://github.com/dorianbrown/rank_bm25)
+[![Ollama](https://img.shields.io/badge/Local%20LLM-Ollama%20(rtu--senior)-black.svg)](https://ollama.com/)
+[![LangSmith](https://img.shields.io/badge/Observability-LangSmith-orange.svg)](https://smith.langchain.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
-## Live Deployment
+## The Story: Why We Built This
 
-The system is deployed live on Hugging Face Spaces backed by dynamic **NVIDIA A10G ZeroGPU** hardware:
-* **Interactive Live App**: [https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant](https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant)
+If you have ever prepared for an RTU semester examination, you know the drill:
+* It is 2 AM before the exam, and you are digging through photocopied stacks of previous year question papers (PYQs).
+* The syllabus has 5 massive units, but you only have 6 to 8 hours left to study.
+* You do not know which topics are genuinely repeated, which ones carry 15 marks in Part C, and what the examiner actually expects on the answer sheet.
+* Generic chatbots like ChatGPT or Gemini do not understand the RTU paper pattern: they write long essays without the block diagrams, algorithmic steps, or marks-weightage breakdowns that RTU evaluators grade on.
+
+We built this project to solve that exact problem. Think of it as that knowledgeable 4th-year senior from your hostel who knows every past paper from the last decade, knows how marks are awarded, and explains concepts simply in English or college Hinglish with the exact structure needed to clear the exam.
+
+---
+
+## Live Deployments & Demos
+
+* **Interactive Streamlit App (Full Experience)**: `http://localhost:8501` (via local launcher)
+* **Live Hugging Face Space**: [https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant](https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant)
 * **Direct Webview**: [https://keshavagarwal779-rtu-exam-assistant.hf.space](https://keshavagarwal779-rtu-exam-assistant.hf.space)
 
 ---
 
-## Overview
+## What Makes This Different
 
-Preparing for university engineering exams usually requires searching through dozens of past-year question papers (PYQs), estimating repeated question frequency, and aligning responses with university scoring expectations.
+### 1. Senior Tutor Persona (English & Hinglish)
+The assistant does not sound like a robotic textbook. It talks like an empathetic senior tutor. You can ask in formal English or natural Hinglish:
+* *"B-tree insertion ka working trace karke samjhao 10 marks ke format mein."*
+* *"TOC mein Pumping Lemma 2 marks ke liye kaise likhein?"*
+* *"I have 6 hours left for DBMS exam. Give me a crash revision roadmap."*
 
-**RTU AI Academic Assistant** converts 724 RTU past question papers (2010-2024) and comprehensive syllabus archives into a verified academic study companion:
-1. **Senior Tutor Exam Assistant**: Natural English and Hinglish conversational tutor providing exam-oriented responses (Definitions, Block Diagrams, Algorithmic Steps, Working Examples, and RTU Scoring Tips).
-2. **Verifiable Paper Citations**: Every answer links directly to authentic RTU question papers with subject code, year, section, marks, and physical PDF page numbers.
-3. **High-Yield Topic Rankings**: Empirical question frequency analysis identifying high-weightage topics across past examinations.
-4. **Crash Course Revision Planner**: Structured hour-by-hour revision schedules calculated from available preparation time.
-5. **Interactive Practice & Evaluation**: Practice questions with scoring rubrics aligned to university grading criteria.
-6. **Past Papers Archive**: Searchable database of past exam questions and university papers.
+### 2. Standard 10-Mark and 2-Mark Exam Format
+Every long-form explanation is structured specifically for university evaluators:
+1. **Core Technical Definition & Academic Scope (2 Marks)**: Formal statement with technical terminology.
+2. **Examiner-Oriented Diagram Guide (3 Marks)**: Clear ASCII/text schematic, block layout, or state transition guide to draw on the answer sheet.
+3. **Step-by-Step Working & Algorithm (3 Marks)**: Numbered steps, recurrence relations, or dataflow transitions.
+4. **Concrete Trace / Numerical Example (1 Mark)**: Worked sample input proving practical validity.
+5. **RTU Scoring Tip (1 Mark)**: Practical warnings about deduction traps (e.g., highlighting time complexity, underlining headings, boxing final numerical answers).
 
----
+### 3. Verifiable Past Paper Citations
+No hallucinations. Every answer includes citations linking directly to authentic RTU examination papers with subject code, exam year, section (Part A, B, or C), marks, and original question text.
 
-## Benchmark Performance
+### 4. High-Yield Topic Weightage
+The system analyzes past examination papers to empirically calculate:
+* Total marks yielded by each topic across past papers.
+* Number of distinct exam sessions the topic appeared in.
+* Frequency of Part C (15 marks) vs. Part B (8 marks) vs. Part A (2 marks) questions.
+* Automatic priority tags (`HIGH PRIORITY` or `CORE EXAM TOPIC`).
 
-Evaluated on 100 test queries across core engineering subjects:
+### 5. Dynamic Crash Course Planner
+Tell the assistant how many hours you have left (from 1 to 12 hours). It runs a knapsack-style time budget that prioritizes high-weightage topics first and reserves the final hour for formula and diagram revision.
 
-* **Hit@1**: **89.4%** (top retrieved question is directly relevant)
-* **Hit@5**: **95.3%** (relevant exam question captured in top 5)
-* **Hit@10**: **97.7%** (captured in top 10)
-* **MRR (Mean Reciprocal Rank)**: **0.922**
-* **Recall@5**: **87.7%**
-* **Out-of-Scope Guardrail ROC-AUC**: **0.9702**
-* **Pass Rate**: **28/28 Automated Pytest Integration, Retrieval & Security Tests (100%)**
+### 6. Interactive Answer Grading (0 to 10 Rubric)
+Paste your practice answer into the evaluator. It grades your answer on RTU's standard rubric:
+* Definition & Academic Concept: 0 to 2.5 marks
+* Diagram & Architecture: 0 to 2.5 marks
+* Procedural Steps & Working: 0 to 3.0 marks
+* Numerical / Example / Complexity: 0 to 2.0 marks
+It tells you honestly where marks would be deducted and how to reach full marks.
 
----
-
-## Architecture
-
-The system utilizes a 4-stage hybrid retrieval and neural reranking pipeline:
-
-```
-User Query (English / Hinglish)
-           │
-           ├───> Dense Retrieval: FAISS IndexFlatIP (BAAI/bge-small-en-v1.5) [k=25]
-           │
-           └───> Sparse Retrieval: BM25Okapi Tokenized Lexical Matching [k=25]
-                         │
-                         ▼
-           Reciprocal Rank Fusion (RRF, k=60)
-                         │
-                         ▼
-           Neural Cross-Encoder Reranking (ms-marco-MiniLM-L-6-v2)
-                         │
-                         ▼
-           Out-of-Scope Score Gate & Context Extraction
-                         │
-                         ▼
-           LLM Synthesis (Groq / Gemini / Local) + Verifiable Citations
-```
+### 7. Out-of-Syllabus Guardrails
+If someone asks about non-academic topics (Bollywood gossip, stock trading, cooking recipes, or cricket scores), the assistant strictly and politely refuses, reminding the student that it is exclusively focused on RTU B.Tech engineering exam prep.
 
 ---
 
-## Core Engineering Subjects Covered
+## Real Data & Coverage Numbers
 
-* **Semester 3**: DSA, OOP (C++), DE, AEM, SE, MEFA
-* **Semester 4**: DBMS, TOC, DCCN, DMS, TC, POC
-* **Semester 5**: OS, DAA, CN, MI, ITC
-* **Semester 6**: AI, CD, CC, CG, CA
-* **Semester 7**: BDA, ML, ISS, IOT
-* **Semester 8**: DS, DIP, DM, MC, RTS
+We do not use synthetic or placeholder data. Everything is grounded in genuine university archives:
+
+| Metric | Verified Count |
+| :--- | :--- |
+| **Past Examination Papers on Disk** | **724 Papers** (spanning 2010 to 2024) |
+| **Canonical Extracted Question Papers** | **150 Papers** (PyMuPDF + RapidOCR high-yield engine) |
+| **Searchable Exam Questions in Database** | **1,534 Questions** stored with full metadata |
+| **Curriculum Topics Cataloged** | **180 Syllabus Topics** across **109 Units** |
+| **Core Engineering Subjects** | **22 Active Subjects** covering Semesters 3 through 8 |
+| **Dense Vector Embeddings** | **1,534 Vectors** in FAISS (`BAAI/bge-small-en-v1.5`) |
+| **Sparse Lexical Index** | **1,534 Documents** in BM25Okapi |
+| **Fine-Tuning Dataset** | **748 Authentic Question-Answer Pairs** |
 
 ---
 
-## Local Execution
+## Subjects & Semesters Covered
 
-### 1-Click Unified Launcher (Windows)
-Double-click:
-```cmd
-run_app.bat
-```
-This launches the FastAPI backend on `http://127.0.0.1:8000` and the Streamlit interface on `http://localhost:8501`.
+* **Semester 3**: Data Structures and Algorithms (DSA), Object Oriented Programming in C++ (OOP), Digital Electronics (DE), Advanced Engineering Mathematics (AEM), Software Engineering (SE), Managerial Economics and Financial Accounting (MEFA).
+* **Semester 4**: Database Management Systems (DBMS), Theory of Computation (TOC), Data Communication and Computer Networks (DCCN), Discrete Mathematics Structure (DMS), Technical Communication (TC).
+* **Semester 5**: Operating Systems (OS), Design and Analysis of Algorithms (DAA), Microprocessor and Interfaces (MI), Computer Networks (CN).
+* **Semester 6**: Artificial Intelligence (AI), Compiler Design (CD), Computer Architecture (CA), Cloud Computing (CC).
+* **Semester 7**: Big Data Analytics (BDA), Machine Learning (ML), Internet of Things (IOT), Information System Security (ISS).
+* **Semester 8**: Distributed Systems (DS), Digital Image Processing (DIP), Disaster Management (DM), Mobile Computing (MC), Real Time Systems (RTS).
 
-### Gradio Interface
-Run directly:
-```bash
-python app.py
+---
+
+## System Architecture
+
+The architecture uses a 4-stage hybrid retrieval and neural reranking pipeline with local or cloud inference:
+
 ```
-This launches the Gradio web application locally on `http://127.0.0.1:7860`.
+                      [ Student / User Interface ]
+                      (Streamlit Web UI / Gradio)
+                                  │
+                                  ▼
+                        [ FastAPI Backend ]
+                      (Port 8000 /api endpoints)
+                                  │
+         ┌────────────────────────┴────────────────────────┐
+         ▼                                                 ▼
+[ Intent Router & Entity Extractor ]             [ Multi-Turn Session Memory ]
+(Greeting, Plan, Importance, RAG)                (Maintains active subject state)
+         │
+         ▼
+[ Hybrid Retrieval Pipeline ]
+   ├── Dense Vector Search: FAISS IndexFlatIP (BAAI/bge-small-en-v1.5) [k=25]
+   └── Sparse Lexical Search: BM25Okapi Tokenized Match [k=25]
+         │
+         ▼
+[ Reciprocal Rank Fusion (RRF, k=60) + Metadata Filtering ]
+         │
+         ▼
+[ Neural Cross-Encoder Reranker ] (ms-marco-MiniLM-L-6-v2)
+   └── Score Threshold Gate (score >= -6.0)
+         │
+         ▼
+[ LLM Generation Layer ]
+   ├── Local Ollama: Custom Fine-Tuned "rtu-senior" (Qwen2.5-1.5B QLoRA)
+   ├── Groq Cloud: llama-3.3-70b-versatile
+   ├── Google Gemini: gemini-1.5-flash
+   └── Offline Mentor: Deterministic Template Engine (Zero-internet fallback)
+         │
+         ▼
+[ LangSmith Observability ] ──> Latency, Tokens, Retrieval Traces
+         │
+         ▼
+[ Grounded Answer with Verifiable Past Paper Citations ]
+```
+
+---
+
+## Custom Fine-Tuned Model: `rtu-senior`
+
+Instead of relying solely on generic base models, we fine-tuned **Qwen2.5-1.5B-Instruct** using QLoRA specifically on RTU exam data.
+
+* **Training Dataset**: 748 curated examples ([rtu_train_dataset_expanded.jsonl](file:///c:/Users/kesha/OneDrive/Desktop/rtu%20project/rtu-ai-assistant/fine_tuning/rtu_train_dataset_expanded.jsonl)) covering 10-mark structures, 2-mark brevity, quiz generation, answer grading, OCR extraction, and out-of-syllabus refusals.
+* **Training Platform**: Free Google Colab T4 GPU (16 GB VRAM) using our automated notebook ([RTU_Senior_Tutor_FineTuning_Colab.ipynb](file:///c:/Users/kesha/OneDrive/Desktop/rtu%20project/rtu-ai-assistant/fine_tuning/RTU_Senior_Tutor_FineTuning_Colab.ipynb)).
+* **Training Metrics**:
+  * Training Loss: dropped from `3.439` to `0.7449`
+  * Mean Token Accuracy: **`94.83%`** across 3 epochs (141 steps)
+* **Local Quantization**: Exported to 8-bit GGUF (`rtu_senior_tutor_q8.gguf`, 1.57 GB) and 4-bit GGUF (`rtu_senior_tutor_q4.gguf`, 940 MB).
+* **Hardware Friendly**: Runs locally on a standard 4 GB VRAM laptop (e.g., NVIDIA GTX 1650) with `num_ctx = 4096` in local Ollama with zero external API calls.
+
+---
+
+## Quick Start Guide
+
+### Option 1: 1-Click Unified Launcher (Windows)
+Double-click `run_app.bat` in the project root. This automatically starts:
+1. The FastAPI backend server on `http://127.0.0.1:8000`
+2. The Streamlit web application on `http://localhost:8501`
+
+### Option 2: Manual Terminal Startup
+
+1. **Clone the repository**:
+   ```bash
+   git clone https://github.com/keshav045/rtu-chatbot.git
+   cd rtu-chatbot
+   ```
+
+2. **Create and activate a virtual environment**:
+   ```bash
+   python -m venv venv
+   # On Windows:
+   venv\Scripts\activate
+   # On Linux/macOS:
+   source venv/bin/activate
+   ```
+
+3. **Install dependencies**:
+   ```bash
+   pip install -r requirements.txt
+   pip install -r rtu-ai-assistant/backend/requirements.txt
+   ```
+
+4. **Start the FastAPI backend**:
+   ```bash
+   python -m uvicorn app.main:app --app-dir rtu-ai-assistant/backend --host 127.0.0.1 --port 8000
+   ```
+
+5. **Start the Streamlit user interface**:
+   ```bash
+   streamlit run streamlit_app.py --server.port 8501
+   ```
+
+Open your browser to **`http://localhost:8501`**.
+
+---
+
+## Running with Local Ollama (`rtu-senior`)
+
+If you want to run completely offline without spending any API credits:
+
+1. Install [Ollama](https://ollama.com/).
+2. Navigate to the models directory and build the model:
+   ```bash
+   cd rtu-ai-assistant/models
+   ollama create rtu-senior -f Modelfile
+   ollama run rtu-senior
+   ```
+3. In `rtu-ai-assistant/backend/app/core/config.py`, verify:
+   ```python
+   DEFAULT_LLM_PROVIDER = "ollama"
+   OLLAMA_MODEL = "rtu-senior"
+   OLLAMA_NUM_CTX = 4096
+   ```
+4. The entire application now runs 100% locally on your machine with zero internet required.
+
+---
+
+## Observability & Tracing with LangSmith
+
+We integrated production tracing through LangSmith to monitor latency, token consumption, and retrieval accuracy in real time.
+
+To enable LangSmith:
+1. Create a free account at [smith.langchain.com](https://smith.langchain.com).
+2. Set your environment variables in `.env` (or pass via terminal):
+   ```env
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=your_api_key_here
+   LANGCHAIN_PROJECT=rtu-ai-assistant
+   LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
+   ```
+Every conversation turn, hybrid retrieval pass, and LLM call will now stream execution traces to your LangSmith dashboard.
+
+---
+
+## Project Structure
+
+```text
+rtu-project/
+├── streamlit_app.py                   # Main Streamlit Web Application
+├── app.py                             # Gradio Standalone Application
+├── run_app.bat                        # 1-Click Unified Windows Launcher
+├── requirements.txt                   # Root dependency manifest
+│
+├── rtu-ai-assistant/
+│   ├── backend/
+│   │   ├── app/
+│   │   │   ├── api/endpoints.py       # REST API endpoints (Chat, Search, Quiz, Planner)
+│   │   │   ├── core/config.py         # System configuration & environment loading
+│   │   │   ├── core/tracer.py         # LangSmith zero-overhead tracing module
+│   │   │   ├── database/models.py     # SQLite SQLAlchemy ORM schemas
+│   │   │   ├── llm/                   # Multi-provider LLM abstraction (Ollama, Groq, Gemini)
+│   │   │   ├── retrieval/             # Hybrid FAISS + BM25 + Cross-Encoder reranker
+│   │   │   └── services/              # Business logic (Chat, Importance, Planner, Quiz)
+│   │   ├── data/
+│   │   │   ├── storage/rtu_metadata.db # SQLite database with 1,534 questions
+│   │   │   └── indexes/               # Precomputed FAISS & BM25 binary indexes
+│   │   └── tests/                     # Automated test suite (28 integration & unit tests)
+│   │
+│   ├── fine_tuning/
+│   │   ├── generate_expanded_dataset.py # Synthesizes 748 ChatML pairs from SQLite
+│   │   ├── rtu_train_dataset_expanded.jsonl # 748-example fine-tuning dataset
+│   │   ├── RTU_Senior_Tutor_FineTuning_Colab.ipynb # Free Google Colab T4 training notebook
+│   │   ├── train_qlora_colab.py       # Colab QLoRA training script
+│   │   ├── train_qlora_local.py       # Local 4 GB VRAM training script
+│   │   └── validate_dataset.py        # Dataset validation and verification script
+│   │
+│   └── models/
+│       ├── Modelfile                  # Ollama configuration for rtu-senior
+│       ├── rtu_senior_tutor_q8.gguf   # 8-bit quantized GGUF model (1.57 GB)
+│       └── rtu_senior_tutor_q4.gguf   # 4-bit quantized GGUF model (940 MB)
+```
 
 ---
 
 ## Automated Test Suite
 
-To run all 28 automated integration, retrieval, security, and regression tests:
+We maintain an automated test suite verifying ingestion, hybrid retrieval, cross-encoders, and security guardrails:
+
 ```bash
 pytest rtu-ai-assistant/backend/tests -o pythonpath="rtu-ai-assistant/backend"
 ```
-Test results:
-* Phase 1 (Ingestion & SQLite schema): 3/3 passed
-* Phase 2 (Dense & Sparse Retrieval, RRF): 6/6 passed
-* Phase 3 (FastAPI Endpoints & Citations): 6/6 passed
-* Phase 4 (v2 Features & Cross-Encoder): 6/6 passed
-* Phase 5 (Security Guardrails, Anti-Jailbreak, Anti-Leakage & Feedback): 7/7 passed
+
+All 28 tests pass with 100% success:
+* **Phase 1: Ingestion & Schema Integrity**: 3/3 passed
+* **Phase 2: Dense, Sparse & RRF Hybrid Retrieval**: 6/6 passed
+* **Phase 3: FastAPI Endpoints & Citation Linking**: 6/6 passed
+* **Phase 4: Multi-Turn Memory & Follow-Up Resolution**: 6/6 passed
+* **Phase 5: Security Guardrails & Out-of-Syllabus Refusal**: 7/7 passed
+
+---
+
+## License
+
+This project is licensed under the MIT License. See `LICENSE` for details.
+All past question papers and university syllabus structures referenced in this project are the intellectual property of Rajasthan Technical University (RTU), Kota.
