@@ -557,21 +557,29 @@ class ChatService:
                     marks_thresh = 10 if part_filter == "Part C" else (6 if part_filter == "Part B" else 2)
                     part_qs = []
                     if subj_obj:
-                        part_qs = (
+                        raw_part_qs = (
                             db.query(Question, Paper.year, Paper.source_pdf)
                             .join(Paper, Question.paper_id == Paper.id)
                             .filter(Paper.subject_id == subj_obj.id)
                             .filter((Question.part.ilike(f"%{part_filter}%")) | (Question.marks >= marks_thresh))
                             .order_by(Paper.year.desc())
-                            .limit(6)
+                            .limit(20)
                             .all()
                         )
-                    if part_qs:
-                        q_bullets = []
-                        for q_rec, pyr, ppdf in part_qs:
+                        for q_rec, pyr, ppdf in raw_part_qs:
                             clean_t = (q_rec.text or "").strip()
                             clean_t = re.sub(r'\s+', ' ', clean_t)
-                            q_bullets.append(f"- **[{q_rec.part or part_filter} | {q_rec.marks or marks_thresh} Marks] ({pyr})**: {clean_t[:160]}...")
+                            # Exclude OCR header/footer noise or fragmented sub-formula lines
+                            if len(clean_t) < 25 or re.match(r'^[A-Z0-9\/\(\)\s\.\+\*\-]+$', clean_t):
+                                continue
+                            part_qs.append((q_rec, pyr, ppdf, clean_t))
+                            if len(part_qs) >= 6:
+                                break
+
+                    if part_qs:
+                        q_bullets = []
+                        for q_rec, pyr, ppdf, clean_t in part_qs:
+                            q_bullets.append(f"- **[{q_rec.part or part_filter} | {q_rec.marks or marks_thresh} Marks] ({pyr})**: {clean_t}")
                         assistant_reply = (
                             f"### RTU {subj_title} ({target_subject}): High-Yield {part_filter} Questions\n\n"
                             f"RTU past examinations ke analysis ke mutabik, **{part_filter}** ke liye yeh questions aur topics high-scoring hain:\n\n"
@@ -627,28 +635,34 @@ class ChatService:
                 # Query real past year questions from DB
                 db_questions = []
                 if subj_obj:
-                    db_questions = (
+                    raw_db_questions = (
                         db.query(Question, Paper.year, Paper.source_pdf)
                         .join(Paper, Question.paper_id == Paper.id)
                         .filter(Paper.subject_id == subj_obj.id)
                         .order_by(Paper.year.desc())
-                        .limit(10)
+                        .limit(35)
                         .all()
                     )
+                    for q, yr, pdf in raw_db_questions:
+                        clean_t = (q.text or "").strip()
+                        clean_t = re.sub(r'T-\d+', '', clean_t)
+                        clean_t = re.sub(r'\s+', ' ', clean_t).strip()
+                        if len(clean_t) < 20 or re.match(r'^[A-Z0-9\/\(\)\s\.\+\*\-]+$', clean_t):
+                            continue
+                        db_questions.append((q, yr, pdf, clean_t))
 
                 if db_questions:
                     # Group by part / marks
-                    part_a = [q for q in db_questions if (q[0].marks or 0) <= 3 or "Part A" in (q[0].part or "")]
-                    part_b = [q for q in db_questions if 4 <= (q[0].marks or 0) <= 8 or "Part B" in (q[0].part or "")]
-                    part_c = [q for q in db_questions if (q[0].marks or 0) > 8 or "Part C" in (q[0].part or "")]
+                    part_a = [item for item in db_questions if (item[0].marks or 0) <= 3 or "Part A" in (item[0].part or "")]
+                    part_b = [item for item in db_questions if 4 <= (item[0].marks or 0) <= 8 or "Part B" in (item[0].part or "")]
+                    part_c = [item for item in db_questions if (item[0].marks or 0) > 8 or "Part C" in (item[0].part or "")]
 
                     formatted_sections = []
                     citations_data = []
 
                     if part_a:
                         a_lines = []
-                        for q, yr, pdf in part_a[:3]:
-                            clean_text = re.sub(r'T-\d+', '', q.text).strip()
+                        for q, yr, pdf, clean_text in part_a[:3]:
                             a_lines.append(f"- **[{yr} - {q.part or 'Part A'} ({q.marks or 2} Marks)]**: {clean_text}")
                             citations_data.append({
                                 "question_id": q.id,
@@ -663,8 +677,7 @@ class ChatService:
 
                     if part_b:
                         b_lines = []
-                        for q, yr, pdf in part_b[:3]:
-                            clean_text = re.sub(r'T-\d+', '', q.text).strip()
+                        for q, yr, pdf, clean_text in part_b[:3]:
                             b_lines.append(f"- **[{yr} - {q.part or 'Part B'} ({q.marks or 8} Marks)]**: {clean_text}")
                             citations_data.append({
                                 "question_id": q.id,
@@ -679,8 +692,7 @@ class ChatService:
 
                     if part_c:
                         c_lines = []
-                        for q, yr, pdf in part_c[:2]:
-                            clean_text = re.sub(r'T-\d+', '', q.text).strip()
+                        for q, yr, pdf, clean_text in part_c[:2]:
                             c_lines.append(f"- **[{yr} - {q.part or 'Part C'} ({q.marks or 15} Marks)]**: {clean_text}")
                             citations_data.append({
                                 "question_id": q.id,
