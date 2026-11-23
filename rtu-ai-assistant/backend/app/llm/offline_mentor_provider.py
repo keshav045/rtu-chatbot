@@ -50,38 +50,55 @@ class OfflineMentorProvider(BaseLLMProvider):
                     "- If this is part of your branch syllabus, specify the Unit number."
                 )
 
-        # Parse questions from the retrieved context blocks
-        q_blocks = re.findall(r"\[(?:Source \d+ \| Question ID:|Document \d+)\s*([^\]]+)\]\s*(.*?)(?=\n\[(?:Source \d+|Document \d+)|\Z)", retrieved_context, re.DOTALL)
-        
+        # Parse questions from the retrieved context blocks (supports both LangChain format and legacy context)
         parsed_questions = []
-        for qid_match, block in q_blocks:
-            q_text_match = re.search(r'Question Text:\s*"?(.*?)"?(?=\n|$)', block, re.DOTALL)
-            year_match = re.search(r"\b(20[12]\d)\b", block)
-            subj_match = re.search(r"\(([A-Za-z0-9_-]+),", block)
-            part_match = re.search(r"(Part\s*[ABC]|Section\s*[ABC])", block, re.I)
-            marks_match = re.search(r"\((\d+)\s*Marks\)", block, re.I)
-            pdf_match = re.search(r"Source PDF:\s*(.*?)\s*\(Page", block)
-            page_match = re.search(r"Page\s*(\d+)", block)
 
-            q_text = q_text_match.group(1).strip() if q_text_match else ""
-            year = year_match.group(1).strip() if year_match else "N/A"
-            subject = subj_match.group(1).strip() if subj_match else "RTU Subject"
-            part = part_match.group(1).strip() if part_match else "Part B"
-            marks = marks_match.group(1).strip() if marks_match else "N/A"
-            pdf = pdf_match.group(1).strip() if pdf_match else "RTU_Exam.pdf"
-            page = page_match.group(1).strip() if page_match else "1"
-
-            if q_text:
+        # 1. Match LangChain format: [DSA 2014 Part A 2m] Question text...
+        lc_blocks = re.findall(r"\[([A-Za-z0-9_-]+)\s+(\d{4})\s+(Part\s*[ABC]|Section\s*[ABC])\s+(\d+)m\]\s*(.*?)(?=\n\n\[|\Z)", retrieved_context, re.DOTALL)
+        for subj, yr, sec, m, q_txt in lc_blocks:
+            if q_txt.strip():
                 parsed_questions.append({
-                    "question_id": qid_match.strip(),
-                    "text": q_text,
-                    "year": year,
-                    "subject": subject,
-                    "part": part,
-                    "marks": marks,
-                    "pdf": pdf,
-                    "page": page
+                    "question_id": f"RTU_{subj}_{yr}",
+                    "text": q_txt.strip(),
+                    "year": yr,
+                    "subject": subj,
+                    "part": sec,
+                    "marks": m,
+                    "pdf": "RTU_Exam.pdf",
+                    "page": "1"
                 })
+
+        # 2. Match legacy pipeline context blocks: [Source 1 | Question ID: ...]
+        if not parsed_questions:
+            q_blocks = re.findall(r"\[(?:Source \d+ \| Question ID:|Document \d+)\s*([^\]]+)\]\s*(.*?)(?=\n\[(?:Source \d+|Document \d+)|\Z)", retrieved_context, re.DOTALL)
+            for qid_match, block in q_blocks:
+                q_text_match = re.search(r'Question Text:\s*"?(.*?)"?(?=\n|$)', block, re.DOTALL)
+                year_match = re.search(r"\b(20[12]\d)\b", block)
+                subj_match = re.search(r"\(([A-Za-z0-9_-]+),", block)
+                part_match = re.search(r"(Part\s*[ABC]|Section\s*[ABC])", block, re.I)
+                marks_match = re.search(r"\((\d+)\s*Marks\)", block, re.I)
+                pdf_match = re.search(r"Source PDF:\s*(.*?)\s*\(Page", block)
+                page_match = re.search(r"Page\s*(\d+)", block)
+
+                q_text = q_text_match.group(1).strip() if q_text_match else ""
+                year = year_match.group(1).strip() if year_match else "N/A"
+                subject = subj_match.group(1).strip() if subj_match else "RTU Subject"
+                part = part_match.group(1).strip() if part_match else "Part B"
+                marks = marks_match.group(1).strip() if marks_match else "N/A"
+                pdf = pdf_match.group(1).strip() if pdf_match else "RTU_Exam.pdf"
+                page = page_match.group(1).strip() if page_match else "1"
+
+                if q_text:
+                    parsed_questions.append({
+                        "question_id": qid_match.strip(),
+                        "text": q_text,
+                        "year": year,
+                        "subject": subject,
+                        "part": part,
+                        "marks": marks,
+                        "pdf": pdf,
+                        "page": page
+                    })
 
         if not parsed_questions:
             return (

@@ -23,6 +23,8 @@ from app.core.config import settings
 from app.database.session import SessionLocal
 from app.retrieval.pipeline import RetrievalPipeline
 from app.services.chat_service import ChatService
+from app.core.tracer import setup_langsmith_tracing
+from app.retrieval.lc_retriever import build_retriever
 from app.services.analytics_service import AnalyticsService
 from app.services.importance_service import ImportanceService
 from app.services.planner_service import PlannerService
@@ -42,14 +44,19 @@ logger = logging.getLogger("rtu.app")
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("Initializing RTU AI Academic Assistant Backend...")
+    setup_langsmith_tracing()
     db = SessionLocal()
     try:
         pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
         pipeline.load_indexes(db)
         logger.info("Hybrid Retrieval Engine (FAISS + BM25 + CrossEncoder) ready.")
 
+        logger.info("Initializing LangChain Hybrid Compression Retriever...")
+        lc_retriever = build_retriever(db=db)
+        logger.info("LangChain Retriever initialized.")
+
         analytics_service = AnalyticsService(dense_indexer=pipeline.dense_indexer)
-        chat_service = ChatService(pipeline=pipeline)
+        chat_service = ChatService(pipeline=pipeline, lc_retriever=lc_retriever)
         importance_service = ImportanceService()
         planner_service = PlannerService()
         quiz_service = QuizService()

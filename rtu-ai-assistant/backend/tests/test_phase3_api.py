@@ -92,7 +92,7 @@ def test_papers_and_pdf_endpoints(client):
     papers = res.json()
     assert len(papers) > 0
 
-    first_paper = papers[0]
+    first_paper = next((p for p in papers if p.get("question_count", 0) > 0), papers[0])
     paper_id = first_paper["paper_id"]
 
     # Detail

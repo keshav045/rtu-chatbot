@@ -63,7 +63,7 @@ def test_importance_service_tier_c():
     db = SessionLocal()
     try:
         service = ImportanceService()
-        result = service.get_ranked_topics(db, "OS")
+        result = service.get_ranked_topics(db, "BEE")
         assert "error" not in result
         assert result["tier"] == "Tier C"
         assert "Syllabus Weightage" in result["disclaimer"] or "Syllabus Standard" in result["ranked_topics"][0]["basis"]

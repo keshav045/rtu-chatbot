@@ -5,6 +5,7 @@ from .gemini_provider import GeminiProvider
 from .openai_provider import OpenAIProvider
 from .offline_mentor_provider import OfflineMentorProvider
 from .llm_factory import get_llm_provider
+from .lc_models import get_llm
 
 __all__ = [
     "BaseLLMProvider",
@@ -14,6 +15,8 @@ __all__ = [
     "GeminiProvider",
     "OpenAIProvider",
     "OfflineMentorProvider",
-    "get_llm_provider"
+    "get_llm_provider",
+    "get_llm"
 ]
+
 
