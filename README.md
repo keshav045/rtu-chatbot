@@ -13,10 +13,11 @@ pinned: false
 [![Python](https://img.shields.io/badge/Python-3.10%20%7C%203.11-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com/)
 [![Streamlit](https://img.shields.io/badge/UI-Streamlit-FF4B4B.svg)](https://streamlit.io/)
+[![LangChain](https://img.shields.io/badge/Orchestration-LangChain%20LCEL-1C3C3C.svg)](https://www.langchain.com/)
+[![LangSmith](https://img.shields.io/badge/Observability-LangSmith-orange.svg)](https://smith.langchain.com/)
 [![FAISS](https://img.shields.io/badge/Vector%20Search-FAISS-0468D7.svg)](https://github.com/facebookresearch/faiss)
 [![BM25](https://img.shields.io/badge/Keyword%20Search-BM25Okapi-FF6F00.svg)](https://github.com/dorianbrown/rank_bm25)
 [![Ollama](https://img.shields.io/badge/Local%20LLM-Ollama%20(rtu--senior)-black.svg)](https://ollama.com/)
-[![LangSmith](https://img.shields.io/badge/Observability-LangSmith-orange.svg)](https://smith.langchain.com/)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
@@ -35,7 +36,7 @@ We built this project to solve that exact problem. Think of it as that knowledge
 
 ## Live Deployments & Demos
 
-* **Interactive Streamlit App (Full Experience)**: `http://localhost:8501` (via local launcher)
+* **Interactive Streamlit App**: `http://localhost:8501` (via local launcher)
 * **Live Hugging Face Space**: [https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant](https://huggingface.co/spaces/keshavagarwal779/rtu-exam-assistant)
 * **Direct Webview**: [https://keshavagarwal779-rtu-exam-assistant.hf.space](https://keshavagarwal779-rtu-exam-assistant.hf.space)
 
@@ -78,8 +79,11 @@ Paste your practice answer into the evaluator. It grades your answer on RTU's st
 * Numerical / Example / Complexity: 0 to 2.0 marks
 It tells you honestly where marks would be deducted and how to reach full marks.
 
-### 7. Out-of-Syllabus Guardrails
-If someone asks about non-academic topics (Bollywood gossip, stock trading, cooking recipes, or cricket scores), the assistant strictly and politely refuses, reminding the student that it is exclusively focused on RTU B.Tech engineering exam prep.
+### 7. Academic Screening Guardrails
+Before generating answers, the system runs a multi-stage academic screener:
+* **Input Scope Screener**: Blocks off-topic queries (cricket, cinema, general chatter) to preserve academic rigor.
+* **Prompt Injection Defense**: Prevents instruction overriding, roleplay spoofing, and jailbreak attempts.
+* **Output Sanitizer & Anti-Leakage**: Strips private tokens, system prompts, and verifies citation groundedness.
 
 ---
 
@@ -94,7 +98,7 @@ We do not use synthetic or placeholder data. Everything is grounded in genuine u
 | **Searchable Exam Questions in Database** | **1,534 Questions** stored with full metadata |
 | **Curriculum Topics Cataloged** | **180 Syllabus Topics** across **109 Units** |
 | **Core Engineering Subjects** | **22 Active Subjects** covering Semesters 3 through 8 |
-| **Dense Vector Embeddings** | **1,534 Vectors** in FAISS (`BAAI/bge-small-en-v1.5`) |
+| **Dense Vector Embeddings** | **1,534 Vectors** in LangChain FAISS (`BAAI/bge-small-en-v1.5`) |
 | **Sparse Lexical Index** | **1,534 Documents** in BM25Okapi |
 | **Fine-Tuning Dataset** | **748 Authentic Question-Answer Pairs** |
 
@@ -113,45 +117,44 @@ We do not use synthetic or placeholder data. Everything is grounded in genuine u
 
 ## System Architecture
 
-The architecture uses a 4-stage hybrid retrieval and neural reranking pipeline with local or cloud inference:
+The architecture uses a modular LangChain LCEL pipeline with hybrid compression retrieval and neural reranking:
 
 ```
                       [ Student / User Interface ]
                       (Streamlit Web UI / Gradio)
-                                  │
-                                  ▼
-                        [ FastAPI Backend ]
+                                   │
+                                   ▼
+                         [ FastAPI Backend ]
                       (Port 8000 /api endpoints)
-                                  │
-         ┌────────────────────────┴────────────────────────┐
-         ▼                                                 ▼
-[ Intent Router & Entity Extractor ]             [ Multi-Turn Session Memory ]
-(Greeting, Plan, Importance, RAG)                (Maintains active subject state)
-         │
-         ▼
-[ Hybrid Retrieval Pipeline ]
-   ├── Dense Vector Search: FAISS IndexFlatIP (BAAI/bge-small-en-v1.5) [k=25]
-   └── Sparse Lexical Search: BM25Okapi Tokenized Match [k=25]
-         │
-         ▼
-[ Reciprocal Rank Fusion (RRF, k=60) + Metadata Filtering ]
-         │
-         ▼
-[ Neural Cross-Encoder Reranker ] (ms-marco-MiniLM-L-6-v2)
-   └── Score Threshold Gate (score >= -6.0)
-         │
-         ▼
-[ LLM Generation Layer ]
-   ├── Local Ollama: Custom Fine-Tuned "rtu-senior" (Qwen2.5-1.5B QLoRA)
-   ├── Groq Cloud: llama-3.3-70b-versatile
-   ├── Google Gemini: gemini-1.5-flash
-   └── Offline Mentor: Deterministic Template Engine (Zero-internet fallback)
-         │
-         ▼
-[ LangSmith Observability ] ──> Latency, Tokens, Retrieval Traces
-         │
-         ▼
-[ Grounded Answer with Verifiable Past Paper Citations ]
+                                   │
+          ┌────────────────────────┴────────────────────────┐
+          ▼                                                 ▼
+[ Academic Screening Guardrails ]                [ Multi-Turn Session Memory ]
+(Scope, Injection & Safety Checks)               (Maintains active subject state)
+          │
+          ▼
+[ LangChain Hybrid Retrieval ]
+   ├── Dense Vector Search: LangChain FAISS (BAAI/bge-small-en-v1.5) [k=25]
+   └── Sparse Lexical Search: BM25Retriever Tokenized Match [k=25]
+          │
+          ▼
+[ EnsembleRetriever (0.5 Dense + 0.5 Sparse) ]
+          │
+          ▼
+[ ContextualCompressionRetriever ]
+   └── CrossEncoderReranker (ms-marco-MiniLM-L-6-v2, top_n=5)
+          │
+          ▼
+[ LCEL Senior Tutor Chain ]
+   ├── PromptTemplate (10-Mark Rubric, Diagrams, Scoring Traps)
+   ├── Unified ChatModel (Ollama / Groq / Gemini / OpenAI)
+   └── StrOutputParser
+          │
+          ▼
+[ LangSmith Tracing & Evaluators ] ──> Latency, Tokens, Feedback & Scores
+          │
+          ▼
+[ Output Screening & Grounded Answer with Citations ]
 ```
 
 ---
@@ -197,15 +200,37 @@ Double-click `run_app.bat` in the project root. This automatically starts:
 3. **Install dependencies**:
    ```bash
    pip install -r requirements.txt
-   pip install -r rtu-ai-assistant/backend/requirements.txt
+   pip install -r requirements-lc.txt
    ```
 
-4. **Start the FastAPI backend**:
+4. **Set up Environment Variables**:
+   Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+   Add your keys in `.env`:
+   ```env
+   # LangSmith Tracing (Optional but recommended)
+   LANGCHAIN_TRACING_V2=true
+   LANGCHAIN_API_KEY=your_langsmith_api_key_here
+   LANGCHAIN_PROJECT=rtu-ai-academic-assistant
+
+   # Cloud LLM API Keys (Optional - only needed if not running local Ollama)
+   GROQ_API_KEY=your_groq_key
+   OPENAI_API_KEY=your_openai_key
+   GEMINI_API_KEY=your_gemini_key
+
+   # Default LLM Provider (ollama, groq, gemini, openai, offline)
+   DEFAULT_LLM_PROVIDER=ollama
+   OLLAMA_MODEL=rtu-senior
+   ```
+
+5. **Start the FastAPI backend**:
    ```bash
    python -m uvicorn app.main:app --app-dir rtu-ai-assistant/backend --host 127.0.0.1 --port 8000
    ```
 
-5. **Start the Streamlit user interface**:
+6. **Start the Streamlit user interface**:
    ```bash
    streamlit run streamlit_app.py --server.port 8501
    ```
@@ -225,11 +250,10 @@ If you want to run completely offline without spending any API credits:
    ollama create rtu-senior -f Modelfile
    ollama run rtu-senior
    ```
-3. In `rtu-ai-assistant/backend/app/core/config.py`, verify:
-   ```python
-   DEFAULT_LLM_PROVIDER = "ollama"
-   OLLAMA_MODEL = "rtu-senior"
-   OLLAMA_NUM_CTX = 4096
+3. In your `.env` file, ensure:
+   ```ini
+   DEFAULT_LLM_PROVIDER=ollama
+   OLLAMA_MODEL=rtu-senior
    ```
 4. The entire application now runs 100% locally on your machine with zero internet required.
 
@@ -237,18 +261,19 @@ If you want to run completely offline without spending any API credits:
 
 ## Observability & Tracing with LangSmith
 
-We integrated production tracing through LangSmith to monitor latency, token consumption, and retrieval accuracy in real time.
+Production tracing monitors retrieval latency, token consumption, and evaluation metrics in real time.
 
-To enable LangSmith:
 1. Create a free account at [smith.langchain.com](https://smith.langchain.com).
-2. Set your environment variables in `.env` (or pass via terminal):
+2. Set your environment variables in `.env`:
    ```env
    LANGCHAIN_TRACING_V2=true
-   LANGCHAIN_API_KEY=your_api_key_here
-   LANGCHAIN_PROJECT=rtu-ai-assistant
+   LANGCHAIN_API_KEY=lsv2_pt_...
+   LANGCHAIN_PROJECT=rtu-ai-academic-assistant
    LANGCHAIN_ENDPOINT=https://api.smith.langchain.com
    ```
-Every conversation turn, hybrid retrieval pass, and LLM call will now stream execution traces to your LangSmith dashboard.
+3. **Check Status**: Visit `http://localhost:8000/api/observability/status` to verify real-time connectivity.
+4. **Sync Benchmark Dataset**: Run `POST /api/observability/sync-dataset` to upload the 300-question RTU examination benchmark directly to your LangSmith account.
+5. **Interactive Feedback**: When students give thumbs-up or thumbs-down feedback in the Streamlit UI, scores are directly synced to the corresponding trace in LangSmith Cloud.
 
 ---
 
@@ -259,53 +284,48 @@ rtu-project/
 ├── streamlit_app.py                   # Main Streamlit Web Application
 ├── app.py                             # Gradio Standalone Application
 ├── run_app.bat                        # 1-Click Unified Windows Launcher
-├── requirements.txt                   # Root dependency manifest
+├── requirements.txt                   # Core dependency manifest
+├── requirements-lc.txt                # LangChain & LangSmith dependencies
+├── .env.example                       # Environment configuration template
 │
 ├── rtu-ai-assistant/
 │   ├── backend/
 │   │   ├── app/
-│   │   │   ├── api/endpoints.py       # REST API endpoints (Chat, Search, Quiz, Planner)
+│   │   │   ├── api/endpoints.py       # REST API endpoints (Chat, Search, Quiz, Planner, Observability)
 │   │   │   ├── core/config.py         # System configuration & environment loading
-│   │   │   ├── core/tracer.py         # LangSmith zero-overhead tracing module
+│   │   │   ├── core/tracer.py         # LangSmith tracing engine & feedback sync
+│   │   │   ├── core/langsmith_datasets.py # 300-Question RTU benchmark dataset persistence
 │   │   │   ├── database/models.py     # SQLite SQLAlchemy ORM schemas
-│   │   │   ├── llm/                   # Multi-provider LLM abstraction (Ollama, Groq, Gemini)
-│   │   │   ├── retrieval/             # Hybrid FAISS + BM25 + Cross-Encoder reranker
-│   │   │   └── services/              # Business logic (Chat, Importance, Planner, Quiz)
+│   │   │   ├── llm/
+│   │   │   │   ├── lc_models.py       # Unified LangChain ChatModel factory
+│   │   │   │   └── offline_mentor_provider.py # Template engine fallback
+│   │   │   ├── retrieval/
+│   │   │   │   ├── lc_retriever.py    # Hybrid Ensemble + CrossEncoder compression retriever
+│   │   │   │   ├── pipeline.py        # Retrieval orchestrator
+│   │   │   │   └── query_rewriter.py  # Exam query expansion
+│   │   │   └── services/
+│   │   │       ├── chat_service.py    # Multi-turn conversational orchestrator
+│   │   │       ├── lc_chain.py        # LCEL 10-Mark Senior Tutor answer chain
+│   │   │       ├── screening_service.py # Academic screening guardrails
+│   │   │       ├── planner_service.py # Crash revision schedule planner
+│   │   │       └── quiz_service.py    # Practice exam & evaluation generator
 │   │   ├── data/
 │   │   │   ├── storage/rtu_metadata.db # SQLite database with 1,534 questions
 │   │   │   └── indexes/               # Precomputed FAISS & BM25 binary indexes
-│   │   └── tests/                     # Automated test suite (28 integration & unit tests)
+│   │   └── scripts/                   # Database seeding and OCR ingestion utilities
 │   │
 │   ├── fine_tuning/
 │   │   ├── generate_expanded_dataset.py # Synthesizes 748 ChatML pairs from SQLite
 │   │   ├── rtu_train_dataset_expanded.jsonl # 748-example fine-tuning dataset
 │   │   ├── RTU_Senior_Tutor_FineTuning_Colab.ipynb # Free Google Colab T4 training notebook
 │   │   ├── train_qlora_colab.py       # Colab QLoRA training script
-│   │   ├── train_qlora_local.py       # Local 4 GB VRAM training script
-│   │   └── validate_dataset.py        # Dataset validation and verification script
+│   │   └── validate_dataset.py        # Dataset validation script
 │   │
 │   └── models/
 │       ├── Modelfile                  # Ollama configuration for rtu-senior
 │       ├── rtu_senior_tutor_q8.gguf   # 8-bit quantized GGUF model (1.57 GB)
 │       └── rtu_senior_tutor_q4.gguf   # 4-bit quantized GGUF model (940 MB)
 ```
-
----
-
-## Automated Test Suite
-
-We maintain an automated test suite verifying ingestion, hybrid retrieval, cross-encoders, and security guardrails:
-
-```bash
-pytest rtu-ai-assistant/backend/tests -o pythonpath="rtu-ai-assistant/backend"
-```
-
-All 28 tests pass with 100% success:
-* **Phase 1: Ingestion & Schema Integrity**: 3/3 passed
-* **Phase 2: Dense, Sparse & RRF Hybrid Retrieval**: 6/6 passed
-* **Phase 3: FastAPI Endpoints & Citation Linking**: 6/6 passed
-* **Phase 4: Multi-Turn Memory & Follow-Up Resolution**: 6/6 passed
-* **Phase 5: Security Guardrails & Out-of-Syllabus Refusal**: 7/7 passed
 
 ---
 
