@@ -13,6 +13,12 @@ import uuid
 import logging
 from typing import Optional, Dict, Any
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
+
 logger = logging.getLogger("rtu.tracer")
 
 # Global LangSmith client cache
