@@ -25,7 +25,7 @@ from app.services.importance_service import ImportanceService
 from app.services.planner_service import PlannerService
 from app.services.intent_service import IntentRouter, IntentType
 from app.services.screening_service import AcademicScreeningService
-from app.core.tracer import generate_trace_id, send_screening_eval_to_langsmith
+from app.core.tracer import generate_trace_id, send_screening_eval_to_langsmith, start_trace, end_trace
 from app.core.config import settings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -370,6 +370,13 @@ class ChatService:
 
         # Trace and Screen Student Input
         trace_id = generate_trace_id()
+        start_trace(
+            run_id=trace_id,
+            name=f"rtu_{intent.value.lower()}" if intent else "rtu_turn",
+            inputs={"message": user_message, "subject": target_subject, "mode": mode},
+            tags=["rtu-exam-coach", target_subject.lower()],
+            metadata={"subject": target_subject, "mode": mode, "language": language_pref}
+        )
         input_screening = AcademicScreeningService.screen_input(user_message, active_subject=target_subject)
         if not input_screening.is_safe:
             intent = IntentType.SECURITY_VIOLATION
@@ -967,7 +974,7 @@ class ChatService:
                     "6. **RTU Examiner Scoring Tip**: Direct advice on where students lose marks and how examiners score full 8 or 15 marks."
                 )
 
-                target_provider = (provider_name or "").strip().lower()
+                target_provider = (provider_name or getattr(settings, "DEFAULT_LLM_PROVIDER", "ollama") or "ollama").strip().lower()
                 assistant_reply = None
 
                 # 1. Attempt generation via LangChain LCEL chain for integrated providers
@@ -1086,6 +1093,16 @@ class ChatService:
 
         first_line = user_message.strip().split("\n")[0]
         derived_title = first_line[:40] + ("..." if len(first_line) > 40 else "")
+
+        end_trace(
+            run_id=trace_id,
+            outputs={
+                "answer": assistant_reply,
+                "citations_count": len(saved_citations),
+                "intent": intent.value if intent else "UNKNOWN",
+                "is_safe": input_screening.is_safe and output_screening.is_safe
+            }
+        )
 
         return {
             "session_id": actual_session_id,

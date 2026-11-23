@@ -158,3 +158,52 @@ def send_screening_eval_to_langsmith(
 def generate_trace_id() -> str:
     """Generates a UUID4 trace identifier."""
     return str(uuid.uuid4())
+
+
+def start_trace(
+    run_id: str,
+    name: str = "rtu_turn",
+    inputs: Optional[Dict[str, Any]] = None,
+    tags: Optional[list] = None,
+    metadata: Optional[Dict[str, Any]] = None
+) -> bool:
+    """Creates a trace run in LangSmith for any conversation turn or user request."""
+    client = get_langsmith_client()
+    if not client:
+        return False
+    try:
+        project = get_current_project_name()
+        client.create_run(
+            name=name,
+            inputs=inputs or {},
+            run_type="chain",
+            id=run_id,
+            project_name=project,
+            tags=tags or ["rtu-academic-assistant"],
+            extra={"metadata": metadata or {}}
+        )
+        return True
+    except Exception as e:
+        logger.debug(f"LangSmith start_trace silent fallback: {e}")
+        return False
+
+
+def end_trace(
+    run_id: str,
+    outputs: Optional[Dict[str, Any]] = None,
+    error: Optional[str] = None
+) -> bool:
+    """Updates and finishes the trace run in LangSmith."""
+    client = get_langsmith_client()
+    if not client:
+        return False
+    try:
+        client.update_run(
+            run_id=run_id,
+            outputs=outputs or {},
+            error=error
+        )
+        return True
+    except Exception as e:
+        logger.debug(f"LangSmith end_trace silent fallback: {e}")
+        return False
