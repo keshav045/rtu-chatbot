@@ -29,6 +29,8 @@ from app.database.models import (
     Citation, Upload, Feedback, QuizAttempt, Branch, SubjectOffering, User
 )
 from app.core.config import settings
+from app.core.tracer import send_feedback_to_langsmith, is_tracing_active, get_current_project_name
+from app.core.langsmith_datasets import sync_benchmark_to_langsmith
 
 AUTH_SALT = "rtu_exam_student_salt_v2"
 
@@ -131,6 +133,7 @@ class QuizAnswerRequest(BaseModel):
 class FeedbackRequest(BaseModel):
     session_id: Optional[str] = None
     message_id: Optional[str] = None
+    trace_id: Optional[str] = Field(None, description="LangSmith trace/run ID for direct feedback synchronization")
     rating: Any = Field(..., description="'up'/1 for thumbs up, 'down'/-1 for thumbs down")
     comment: Optional[str] = None
 
@@ -550,7 +553,22 @@ def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db)):
     )
     db.add(fb)
     db.commit()
-    return {"status": "success", "feedback_id": fb.id, "rating": clean_rating}
+
+    # Synchronize feedback with LangSmith trace if available
+    langsmith_target = request.trace_id or request.message_id
+    if langsmith_target:
+        send_feedback_to_langsmith(
+            run_id=langsmith_target,
+            rating=1 if clean_rating == "up" else -1,
+            comment=request.comment
+        )
+
+    return {
+        "status": "success",
+        "feedback_id": fb.id,
+        "rating": clean_rating,
+        "langsmith_synced": bool(langsmith_target)
+    }
 
 # --- Section 10: Conversational RAG & Coaching Endpoints ---
 
@@ -774,6 +792,39 @@ def get_repeated_questions(
         threshold=threshold,
         limit=limit
     )
+
+# --- Observability, Screening & LangSmith Persistence Endpoints ---
+
+@router.get("/observability/status", tags=["Observability & Screening"], summary="LangSmith & Screening Guardrails Status")
+def get_observability_status():
+    """Returns real-time status of LangSmith tracing, active project, and academic screening guardrails."""
+    return {
+        "status": "healthy",
+        "langsmith_tracing_active": is_tracing_active(),
+        "langsmith_project": get_current_project_name(),
+        "screening_guardrails_enabled": True,
+        "input_screeners": [
+            "academic_scope_screener",
+            "prompt_injection_guardrail",
+            "syllabus_boundary_check"
+        ],
+        "output_screeners": [
+            "anti_leakage_sanitizer",
+            "format_rubric_evaluator",
+            "groundedness_checker"
+        ],
+        "evaluators": [
+            "syllabus_adherence",
+            "format_compliance",
+            "citation_groundedness"
+        ]
+    }
+
+@router.post("/observability/sync-dataset", tags=["Observability & Screening"], summary="Sync RTU Benchmark Dataset to LangSmith Cloud")
+def sync_dataset_to_langsmith():
+    """Persists the 300-question RTU examination benchmark dataset into LangSmith Cloud."""
+    return sync_benchmark_to_langsmith()
+
 
 @router.get("/analytics/compare", tags=["Curriculum & Analytics"], summary="Compare Questions Across Two Exam Years")
 def compare_exam_years(

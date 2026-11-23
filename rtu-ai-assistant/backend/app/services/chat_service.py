@@ -24,6 +24,8 @@ from app.llm.base import BaseLLMProvider
 from app.services.importance_service import ImportanceService
 from app.services.planner_service import PlannerService
 from app.services.intent_service import IntentRouter, IntentType
+from app.services.screening_service import AcademicScreeningService
+from app.core.tracer import generate_trace_id, send_screening_eval_to_langsmith
 from app.core.config import settings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
@@ -365,6 +367,14 @@ class ChatService:
         rewritten_query = user_message
         retrieval_res = {}
         retrieval_latency_ms = 0.0
+
+        # Trace and Screen Student Input
+        trace_id = generate_trace_id()
+        input_screening = AcademicScreeningService.screen_input(user_message, active_subject=target_subject)
+        if not input_screening.is_safe:
+            intent = IntentType.SECURITY_VIOLATION
+        elif not input_screening.is_in_syllabus and intent not in (IntentType.GREETING, IntentType.CLOSING, IntentType.HELP_CAPABILITIES, IntentType.SUBJECT_SELECT):
+            intent = IntentType.OUT_OF_SYLLABUS
 
         if intent == IntentType.SECURITY_VIOLATION:
             citations_data = []
@@ -998,8 +1008,24 @@ class ChatService:
                     note = f"*Note: Past RTU examination papers for **{target_subject}** ({full_subj_name}) are currently being compiled into the question archive. Here is the tutorial explanation based on the RTU B.Tech syllabus:*\n\n"
                     assistant_reply = note + assistant_reply
 
-        # Post-Generation Safety and Anti-Leakage Sanitization
-        assistant_reply = self.sanitize_response(assistant_reply)
+        # Post-Generation Safety, Anti-Leakage, and Academic Screening
+        output_screening = AcademicScreeningService.screen_output(
+            raw_output=assistant_reply,
+            query=user_message,
+            retrieved_docs=retrieved_questions
+        )
+        assistant_reply = output_screening.sanitized_output
+
+        # Persist Automated Evaluation Metrics to LangSmith Trace
+        send_screening_eval_to_langsmith(
+            run_id=trace_id,
+            screening_scores={
+                "input_scope": input_screening.scope_score,
+                "input_safety": input_screening.safety_score,
+                "output_format": output_screening.format_score,
+                "output_groundedness": output_screening.groundedness_score,
+            }
+        )
 
         # 6. Persist Messages & Citations
         user_msg_id = f"msg_{uuid.uuid4().hex[:12]}"
@@ -1085,6 +1111,17 @@ class ChatService:
                 for q in retrieved_questions
             ],
             "stats": retrieval_res.get("retrieval_stats", {}),
+            "trace_id": trace_id,
+            "screening": {
+                "is_safe": input_screening.is_safe and output_screening.is_safe,
+                "is_in_syllabus": input_screening.is_in_syllabus,
+                "risk_level": input_screening.risk_level,
+                "scope_score": input_screening.scope_score,
+                "safety_score": input_screening.safety_score,
+                "format_score": output_screening.format_score,
+                "groundedness_score": output_screening.groundedness_score,
+                "warnings": output_screening.warnings,
+            },
             "retrieval_latency_ms": retrieval_latency_ms,
             "latency_ms": round((time.perf_counter() - start) * 1000, 2)
         }

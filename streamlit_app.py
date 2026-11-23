@@ -418,7 +418,18 @@ with st.sidebar:
 
     st.markdown("---")
 
-    # 3. Actions
+    # 3. Observability & Guardrails Status
+    st.subheader("Observability & Safety")
+    with st.expander("LangSmith Tracing", expanded=False):
+        st.markdown("**Project**: `rtu-ai-academic-assistant`")
+        st.markdown("**Status**: Active (Auto-instrumented)")
+        st.markdown("**Screening Evaluators**:")
+        st.markdown("- Syllabus Scope Gate")
+        st.markdown("- Anti-Leakage Sanitizer")
+        st.markdown("- 10-Mark Rubric Compliance")
+        st.caption("Thumbs up/down feedback is synced to LangSmith runs.")
+
+    # 4. Actions
     if st.button("Clear Chat History", use_container_width=True):
         st.session_state.messages = []
         st.session_state.session_id = None
@@ -647,6 +658,20 @@ if st.session_state.selected_page == "Senior Tutor Chat":
 
             if msg["role"] == "assistant":
                 msg_id = msg.get("message_id", f"msg_{idx}")
+                trace_id = msg.get("trace_id")
+                screening = msg.get("screening", {})
+
+                # LangSmith Tracing & Academic Screening Status
+                if trace_id or screening:
+                    sc_ok = screening.get("is_safe", True) and screening.get("is_in_syllabus", True)
+                    sc_badge = "Screening: Passed" if sc_ok else "Screening: Guardrail Active"
+                    trace_display = f"`{trace_id[:12]}...`" if trace_id else "Local"
+                    st.caption(
+                        f"LangSmith Trace: {trace_display} | {sc_badge} "
+                        f"(Scope: {screening.get('scope_score', 1.0):.1f}, "
+                        f"Format: {screening.get('format_score', 1.0):.1f})"
+                    )
+
                 feedback_val = st.feedback("thumbs", key=f"fb_{msg_id}_{idx}")
                 if feedback_val is not None and not msg.get("feedback_submitted"):
                     rating_score = 1 if feedback_val == 1 else -1
@@ -657,12 +682,13 @@ if st.session_state.selected_page == "Senior Tutor Chat":
                         {
                             "session_id": st.session_state.session_id or "default_session",
                             "message_id": msg_id,
+                            "trace_id": trace_id,
                             "rating": rating_score,
-                            "comment": "Streamlit thumbs feedback"
+                            "comment": "Streamlit thumbs feedback synced with LangSmith"
                         }
                     )
                     msg["feedback_submitted"] = True
-                    st.caption("Feedback saved to database.")
+                    st.caption("Feedback saved to database & synced to LangSmith.")
 
     # Chat Input Handling
     user_input = st.chat_input(f"Ask what you want to prepare in {active_subject_code}... (e.g., Explain QuickSort algorithm and time complexity)")
@@ -748,7 +774,9 @@ if st.session_state.selected_page == "Senior Tutor Chat":
                         "role": "assistant",
                         "content": assistant_reply,
                         "citations": citations,
-                        "message_id": assistant_msg_id
+                        "message_id": assistant_msg_id,
+                        "trace_id": res.get("trace_id"),
+                        "screening": res.get("screening", {})
                     })
 
 # ------------------------------------------------------------------------------
