@@ -24,6 +24,7 @@ class IntentType(str, Enum):
     STUDY_PLAN = "STUDY_PLAN"
     TOPIC_IMPORTANCE = "TOPIC_IMPORTANCE"
     PAST_YEAR_QUESTIONS = "PAST_YEAR_QUESTIONS"
+    QUIZ_REQUEST = "QUIZ_REQUEST"
     SUBJECT_SELECT = "SUBJECT_SELECT"
     OUT_OF_SYLLABUS = "OUT_OF_SYLLABUS"
     EXAM_QUESTION = "EXAM_QUESTION"
@@ -236,9 +237,9 @@ class IntentRouter:
             if not has_tech:
                 return IntentType.HELP_CAPABILITIES
 
-        # 4. Study Planning / Crash Course (e.g., "i have 6 hr from now", "exam in 4 hours", "plan my revision")
+        # 4. Study Planning / Crash Course (e.g., "i have 6 hrs from now", "exam in 4 hours", "plan my revision")
         if re.search(
-            r'\b(\d+(?:\.\d+)?\s*(?:hour|hr|ghante|ghanta)|time\s+left|prepare|plan|crash|roadmap|strategy|schedule|time\s+table)\b',
+            r'\b(?:\d+(?:\.\d+)?\s*(?:hours?|hrs?|ghante|ghanta)|(?:time|hours?|hrs?)\s+left|prepare|plan|crash|roadmap|strategy|schedule|time\s+table)\b',
             q
         ):
             return IntentType.STUDY_PLAN
@@ -262,6 +263,13 @@ class IntentRouter:
             has_tech = any(re.search(rf'\b{re.escape(term)}\b', q) for term in TECH_TERMS)
             if not has_tech:
                 return IntentType.PAST_YEAR_QUESTIONS
+
+        # 6b. BUG-12 FIX: Practice Quiz Request (e.g., "Quiz me with 3 questions on data structures.")
+        if re.search(
+            r'\b(quiz\s+me|quiz\s+on|test\s+me|practice\s+quiz|ask\s+me\s+(?:\d+\s+)?questions?|give\s+me\s+\d+\s+(?:practice\s+)?questions?)\b',
+            q
+        ):
+            return IntentType.QUIZ_REQUEST
 
         # 7. Subject Selection / Declaration (e.g., "DSA", "dbms", "it is toc", "for dsa", "computer networks", "dsa subject hai")
         matched_subject = None

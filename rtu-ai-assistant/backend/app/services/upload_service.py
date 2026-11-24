@@ -6,20 +6,140 @@ automatic topic tagging, and review queue management.
 """
 
 import hashlib
+import logging
 import uuid
 import re
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Tuple
 from sqlalchemy.orm import Session
 import fitz
 
 from app.database.models import Upload, Paper, Question, Subject, Topic
 from app.core.config import settings
+from app.retrieval.document_preparer import prepare_retrieval_documents
+
+logger = logging.getLogger("rtu.upload")
 
 UPLOADS_DIR = settings.STORAGE_DIR / "student_uploads"
 UPLOADS_DIR.mkdir(parents=True, exist_ok=True)
 
+
 class UploadService:
+    def __init__(self, pipeline: Optional[Any] = None):
+        self.pipeline = pipeline
+
+    def _extract_questions_from_pdf(self, pdf_path: Path) -> Tuple[int, str, List[Tuple[str, int]]]:
+        """Opens PDF, returns (total_pages, first_page_text, list of (question_text, page_no))."""
+        doc = fitz.open(pdf_path)
+        try:
+            first_page_text = doc[0].get_text() if len(doc) > 0 else ""
+            total_pages = len(doc)
+            extracted_questions: List[Tuple[str, int]] = []
+            q_regex = re.compile(r"(?:Q\.?\s*\d+|^\d+\s*[\.\)]|\([a-z]\))\s*(.*)", re.I | re.MULTILINE)
+            for pno in range(total_pages):
+                p_text = doc[pno].get_text()
+                for m in q_regex.findall(p_text):
+                    clean_q = m.strip()
+                    if len(clean_q) > 15 and "ersahilkagyan" not in clean_q.lower():
+                        extracted_questions.append((clean_q, pno + 1))
+            return total_pages, first_page_text, extracted_questions
+        finally:
+            doc.close()
+
+    def _persist_paper_and_questions(
+        self,
+        db: Session,
+        upload_record: Upload,
+        subj_obj: Subject,
+        extracted_questions: List[Tuple[str, int]],
+        total_pages: int,
+        file_size_kb: float,
+    ) -> List[Question]:
+        """Creates Paper and Question rows for an approved upload."""
+        new_paper_id = f"UP_PAPER_{upload_record.id}"
+        existing_paper = db.query(Paper).filter(Paper.id == new_paper_id).first()
+        if existing_paper:
+            return []
+
+        saved_p = Path(upload_record.saved_path) if upload_record.saved_path else None
+        rel_p = (
+            str(saved_p.relative_to(settings.WORKSPACE_ROOT))
+            if (saved_p and saved_p.exists() and saved_p.is_relative_to(settings.WORKSPACE_ROOT))
+            else (upload_record.filename or "uploaded_paper.pdf")
+        )
+        new_paper = Paper(
+            id=new_paper_id,
+            subject_id=subj_obj.id,
+            scheme_id="SCHEME_RTU_2018",
+            year=upload_record.year or 2024,
+            session=upload_record.session or "Main",
+            source="upload",
+            source_pdf=upload_record.filename,
+            relative_path=rel_p,
+            page_count=max(1, total_pages),
+            file_size_kb=file_size_kb,
+            file_hash=upload_record.file_hash,
+        )
+        db.add(new_paper)
+        db.flush()
+
+        fallback_topic = db.query(Topic).join(Topic.unit).filter(Topic.unit.has(subject_id=subj_obj.id)).first()
+        inserted: List[Question] = []
+        subj_short = subj_obj.short_name or "GEN"
+        yr = upload_record.year or 2024
+
+        for q_idx, (q_text, p_num) in enumerate(extracted_questions[:15], 1):
+            part = "Part A" if len(q_text) < 80 else ("Part B" if len(q_text) < 180 else "Part C")
+            marks = 2 if part == "Part A" else (8 if part == "Part B" else 15)
+            q_entry = Question(
+                id=f"RTU_UP_{subj_short}_{yr}_Q{q_idx:02d}_{upload_record.id}",
+                paper_id=new_paper_id,
+                topic_id=fallback_topic.id if fallback_topic else None,
+                text=q_text,
+                marks=marks,
+                part=part,
+                tag_confidence=0.80,
+                status="approved",
+                page_number=p_num,
+            )
+            db.add(q_entry)
+            inserted.append(q_entry)
+        return inserted
+
+    def _sync_retrieval_indexes(self, db: Session) -> None:
+        """BUG-14 FIX: Keep RetrievalPipeline cache/indexes and LC retriever synced after upload approval."""
+        try:
+            import app.retrieval.lc_retriever as lc_ret_mod
+            lc_ret_mod._CACHED_RETRIEVER = None
+        except Exception:
+            pass
+
+        if self.pipeline is None:
+            return
+        try:
+            self.pipeline.clear_cache()
+            all_docs = prepare_retrieval_documents(db)
+            self.pipeline.doc_store = {doc["question_id"]: doc for doc in all_docs}
+            # Rebuild BM25 quickly (<50ms) and append any newly approved doc vectors to FAISS
+            self.pipeline.bm25_indexer.build_index(all_docs)
+            dense = self.pipeline.dense_indexer
+            if dense and dense.index is not None and dense.model is not None:
+                existing_ids = set(dense.id_mapping)
+                missing_docs = [d for d in all_docs if d["question_id"] not in existing_ids]
+                if missing_docs:
+                    import numpy as np
+                    vecs = dense.model.encode(
+                        [d["document_text"] for d in missing_docs],
+                        batch_size=32,
+                        show_progress_bar=False,
+                        normalize_embeddings=True,
+                        convert_to_numpy=True,
+                    ).astype(np.float32)
+                    dense.index.add(vecs)
+                    dense.id_mapping.extend(d["question_id"] for d in missing_docs)
+        except Exception as e:
+            logger.warning(f"Non-fatal upload index sync warning: {e}")
+
     def process_pdf_upload(
         self,
         db: Session,
@@ -55,18 +175,13 @@ class UploadService:
             f.write(file_bytes)
 
         # 2. Extract Text & Detect Header
-        doc = fitz.open(saved_path)
-        first_page_text = doc[0].get_text() if len(doc) > 0 else ""
-        total_pages = len(doc)
+        total_pages, first_page_text, extracted_questions = self._extract_questions_from_pdf(saved_path)
 
         # Detect Subject Code & Year if not explicitly passed
         detected_year = year
         if not detected_year:
             year_match = re.search(r"\b(20[12]\d)\b", first_page_text)
-            if year_match:
-                detected_year = int(year_match.group(1))
-            else:
-                detected_year = 2024
+            detected_year = int(year_match.group(1)) if year_match else 2024
 
         detected_subj_short = subject_id
         if not detected_subj_short:
@@ -76,20 +191,6 @@ class UploadService:
                     break
 
         detected_subj_short = detected_subj_short or "GEN"
-
-        # 3. Question Splitting
-        extracted_questions = []
-        q_regex = re.compile(r"(?:Q\.?\s*\d+|^\d+\s*[\.\)]|\([a-z]\))\s*(.*)", re.I | re.MULTILINE)
-        
-        for pno in range(total_pages):
-            p_text = doc[pno].get_text()
-            matches = q_regex.findall(p_text)
-            for m in matches:
-                clean_q = m.strip()
-                if len(clean_q) > 15 and "ersahilkagyan" not in clean_q.lower():
-                    extracted_questions.append((clean_q, pno + 1))
-
-        doc.close()
 
         # Decision: Auto-approve or Review Queue
         status = "approved" if len(extracted_questions) >= 5 else "review_queue"
@@ -122,44 +223,18 @@ class UploadService:
 
         # If auto-approved, integrate as Paper and Questions
         if status == "approved" and subj_obj:
-            new_paper_id = f"UP_PAPER_{upload_id}"
-            new_paper = Paper(
-                id=new_paper_id,
-                subject_id=subj_obj.id,
-                scheme_id="SCHEME_RTU_2018",
-                year=detected_year,
-                session="Main",
-                source="upload",
-                source_pdf=filename,
-                relative_path=str(saved_path.relative_to(settings.WORKSPACE_ROOT)) if saved_path.is_relative_to(settings.WORKSPACE_ROOT) else str(saved_path),
-                page_count=total_pages,
+            self._persist_paper_and_questions(
+                db=db,
+                upload_record=upload_record,
+                subj_obj=subj_obj,
+                extracted_questions=extracted_questions,
+                total_pages=total_pages,
                 file_size_kb=round(len(file_bytes) / 1024.0, 1),
-                file_hash=sha256
             )
-            db.add(new_paper)
-            db.flush()
-
-            for q_idx, (q_text, p_num) in enumerate(extracted_questions[:15], 1):
-                part = "Part A" if len(q_text) < 80 else ("Part B" if len(q_text) < 180 else "Part C")
-                marks = 2 if part == "Part A" else (8 if part == "Part B" else 15)
-                
-                # Tag to subject's first topic as fallback
-                topic = db.query(Topic).join(Topic.unit).filter(Topic.unit.has(subject_id=subj_obj.id)).first()
-
-                q_entry = Question(
-                    id=f"RTU_UP_{detected_subj_short}_{detected_year}_Q{q_idx:02d}_{upload_id}",
-                    paper_id=new_paper_id,
-                    topic_id=topic.id if topic else None,
-                    text=q_text,
-                    marks=marks,
-                    part=part,
-                    tag_confidence=0.80,
-                    status="approved",
-                    page_number=p_num
-                )
-                db.add(q_entry)
 
         db.commit()
+        if status == "approved" and subj_obj:
+            self._sync_retrieval_indexes(db)
 
         status_msg = (
             f"Successfully parsed {len(extracted_questions)} questions from {filename}. Status: {status.upper()} (Crowdsourced data added to RTU corpus)."
@@ -207,34 +282,31 @@ class UploadService:
             db.commit()
             return {"status": "success", "upload_id": upload_id, "action": "rejected", "message": "Upload rejected."}
 
-        # Approve action
+        # Approve action: extract questions from saved PDF and persist Paper + Questions
         up.status = "approved"
-        subj_obj = None
-        if up.subject_id:
-            subj_obj = db.query(Subject).filter(Subject.id == up.subject_id).first()
-
-        new_paper_id = f"UP_PAPER_{up.id}"
-        existing_paper = db.query(Paper).filter(Paper.id == new_paper_id).first()
-        if not existing_paper and subj_obj:
+        subj_obj = db.query(Subject).filter(Subject.id == up.subject_id).first() if up.subject_id else None
+        if subj_obj:
             saved_p = Path(up.saved_path) if up.saved_path else None
-            rel_p = str(saved_p.relative_to(settings.WORKSPACE_ROOT)) if (saved_p and saved_p.exists() and saved_p.is_relative_to(settings.WORKSPACE_ROOT)) else (up.filename or "uploaded_paper.pdf")
-            new_paper = Paper(
-                id=new_paper_id,
-                subject_id=subj_obj.id,
-                scheme_id="SCHEME_RTU_2018",
-                year=up.year or 2024,
-                session=up.session or "Main",
-                source="upload",
-                source_pdf=up.filename,
-                relative_path=rel_p,
-                page_count=1,
-                file_size_kb=50.0,
-                file_hash=up.file_hash
+            total_pages = 1
+            extracted_questions: List[Tuple[str, int]] = []
+            file_size_kb = 50.0
+            if saved_p and saved_p.exists():
+                file_size_kb = round(saved_p.stat().st_size / 1024.0, 1)
+                total_pages, _, extracted_questions = self._extract_questions_from_pdf(saved_p)
+                if not up.extracted_questions_count:
+                    up.extracted_questions_count = len(extracted_questions)
+            self._persist_paper_and_questions(
+                db=db,
+                upload_record=up,
+                subj_obj=subj_obj,
+                extracted_questions=extracted_questions,
+                total_pages=total_pages,
+                file_size_kb=file_size_kb,
             )
-            db.add(new_paper)
-            db.flush()
 
         db.commit()
+        if subj_obj:
+            self._sync_retrieval_indexes(db)
         return {
             "status": "success",
             "upload_id": upload_id,

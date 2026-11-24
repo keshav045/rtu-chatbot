@@ -102,6 +102,8 @@ class ChatFilterRequest(BaseModel):
     year_to: Optional[int] = None
     section: Optional[str] = None
     marks: Optional[int] = None
+    branch: Optional[str] = None
+    year: Optional[int] = None
 
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000, description="Student's query or prompt")
@@ -110,6 +112,8 @@ class ChatRequest(BaseModel):
     provider: Optional[str] = Field(None, description="LLM provider: 'offline', 'ollama', 'groq', 'gemini'")
     language: Optional[str] = Field(None, description="'english', 'hinglish', or None for auto")
     mode: Optional[str] = Field(None, description="'standard', 'answer_coach', 'crash', 'quiz'")
+    branch: Optional[str] = Field(None, description="Student branch e.g. 'CSE', 'IT'")
+    year: Optional[int] = Field(None, ge=1, le=4, description="Year of study 1-4")
     filters: Optional[ChatFilterRequest] = None
     top_k: int = Field(5, ge=1, le=20)
     user_id: Optional[str] = Field(None, description="Logged in student user ID")
@@ -255,6 +259,24 @@ def list_conversations_alias(
 
 # --- Student Authentication Endpoints ---
 
+def _format_user_profile(user: User, message: Optional[str] = None) -> Dict[str, Any]:
+    """Formats student auth/profile response resolving Branch.id ('BRANCH_CSE') -> code ('CSE')."""
+    branch_code = user.branch.code if user.branch else (user.branch_id or "CSE").replace("BRANCH_", "")
+    payload: Dict[str, Any] = {
+        "status": "success",
+        "user_id": user.id,
+        "name": user.name,
+        "roll_no": user.roll_no,
+        "email": user.email,
+        "branch": branch_code,
+        "year": user.year,
+        "college": user.college,
+    }
+    if message:
+        payload["message"] = message
+    return payload
+
+
 @router.post("/auth/register", tags=["Student Authentication"], summary="Register New Student")
 def register_student(request: RegisterRequest, db: Session = Depends(get_db)):
     """Registers a student account with RTU roll number, name, branch, and secure password."""
@@ -274,13 +296,21 @@ def register_student(request: RegisterRequest, db: Session = Depends(get_db)):
                 detail=f"Student with email '{request.email.strip()}' is already registered."
             )
 
+    # Resolve branch code ('CSE') to real Branch.id foreign key ('BRANCH_CSE')
+    branch_obj = None
+    if request.branch:
+        branch_clean = request.branch.strip()
+        branch_obj = db.query(Branch).filter(
+            (Branch.id == branch_clean) | (func.lower(Branch.code) == branch_clean.lower())
+        ).first()
+
     new_user = User(
         id=f"user_{uuid.uuid4().hex[:12]}",
         name=request.name.strip(),
         roll_no=request.roll_no.strip(),
         email=request.email.strip() if request.email else None,
         password_hash=hash_password(request.password),
-        branch_id=request.branch,
+        branch_id=branch_obj.id if branch_obj else None,
         year=request.year,
         college=request.college.strip() if request.college else "Rajasthan Technical University (RTU)"
     )
@@ -288,17 +318,7 @@ def register_student(request: RegisterRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
 
-    return {
-        "status": "success",
-        "user_id": new_user.id,
-        "name": new_user.name,
-        "roll_no": new_user.roll_no,
-        "email": new_user.email,
-        "branch": new_user.branch_id,
-        "year": new_user.year,
-        "college": new_user.college,
-        "message": "Student registered successfully."
-    }
+    return _format_user_profile(new_user, message="Student registered successfully.")
 
 @router.post("/auth/login", tags=["Student Authentication"], summary="Student Login")
 def login_student(request: LoginRequest, db: Session = Depends(get_db)):
@@ -320,17 +340,7 @@ def login_student(request: LoginRequest, db: Session = Depends(get_db)):
             detail="Invalid roll number/email or password."
         )
 
-    return {
-        "status": "success",
-        "user_id": user.id,
-        "name": user.name,
-        "roll_no": user.roll_no,
-        "email": user.email,
-        "branch": user.branch_id,
-        "year": user.year,
-        "college": user.college,
-        "message": "Login successful."
-    }
+    return _format_user_profile(user, message="Login successful.")
 
 @router.get("/auth/me", tags=["Student Authentication"], summary="Current Student Profile")
 def get_current_user_profile(user_id: str = Query(..., description="Student User ID"), db: Session = Depends(get_db)):
@@ -339,15 +349,7 @@ def get_current_user_profile(user_id: str = Query(..., description="Student User
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Student profile not found.")
 
-    return {
-        "user_id": user.id,
-        "name": user.name,
-        "roll_no": user.roll_no,
-        "email": user.email,
-        "branch": user.branch_id,
-        "year": user.year,
-        "college": user.college
-    }
+    return _format_user_profile(user)
 
 @router.get("/conversations/{conversation_id}", tags=["Conversational RAG"], summary="Get Conversation Detail (Alias)")
 def get_conversation_alias(conversation_id: str, db: Session = Depends(get_db)):
@@ -537,21 +539,93 @@ def review_upload_action(
         raise HTTPException(status_code=400, detail=result["error"])
     return result
 
-# --- Section 10: Feedback Endpoint ---
+# --- Section 10: Feedback & Answer Correctness Tracking Endpoints ---
 
-@router.post("/feedback", tags=["Conversational RAG"], summary="Submit Student Feedback")
-def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db)):
-    import uuid
-    rating_str = str(request.rating).strip().lower()
-    clean_rating = "up" if rating_str in ("up", "1", "true", "like") else "down"
-    fb = Feedback(
-        id=f"fb_{uuid.uuid4().hex[:12]}",
-        session_id=request.session_id,
-        message_id=request.message_id,
-        rating=clean_rating,
-        comment=request.comment
+def _resolve_feedback_qa(db: Session, fb: Feedback) -> Dict[str, Any]:
+    """Resolves the Question, Answer, and Subject linked to a Feedback record."""
+    assistant_msg = (
+        db.query(Message).filter(Message.id == fb.message_id).first()
+        if fb.message_id else None
     )
-    db.add(fb)
+    sess = (
+        db.query(SessionModel).filter(SessionModel.id == fb.session_id).first()
+        if fb.session_id else (assistant_msg.session if assistant_msg else None)
+    )
+
+    question_text = ""
+    if assistant_msg and assistant_msg.session_id:
+        user_msg = (
+            db.query(Message)
+            .filter(
+                Message.session_id == assistant_msg.session_id,
+                Message.role == "user",
+                Message.created_at <= assistant_msg.created_at,
+            )
+            .order_by(Message.created_at.desc())
+            .first()
+        )
+        if user_msg:
+            question_text = user_msg.content
+    elif fb.session_id:
+        user_msg = (
+            db.query(Message)
+            .filter(Message.session_id == fb.session_id, Message.role == "user")
+            .order_by(Message.created_at.desc())
+            .first()
+        )
+        if user_msg:
+            question_text = user_msg.content
+
+    subj_short = None
+    if sess and sess.subject_id:
+        subj_rec = db.query(Subject).filter(Subject.id == sess.subject_id).first()
+        subj_short = subj_rec.short_name if subj_rec else sess.subject_id.replace("SUBJ_", "")
+
+    is_correct = fb.rating in ("up", "1", "true", "correct")
+    return {
+        "feedback_id": fb.id,
+        "session_id": fb.session_id,
+        "message_id": fb.message_id,
+        "subject": subj_short or "General",
+        "question": question_text or "(Question not recorded)",
+        "answer": assistant_msg.content if assistant_msg else "",
+        "rating": fb.rating,
+        "is_correct": is_correct,
+        "verdict": "Correct" if is_correct else "Incorrect",
+        "comment": fb.comment,
+        "created_at": fb.created_at.isoformat() if fb.created_at else None,
+    }
+
+
+@router.post("/feedback", tags=["Conversational RAG"], summary="Submit or Update Answer Correctness Feedback")
+def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db)):
+    from datetime import datetime
+    rating_str = str(request.rating).strip().lower()
+    clean_rating = "up" if rating_str in ("up", "1", "true", "like", "correct") else "down"
+
+    # Upsert if user flips thumbs-up/down or adds a reason on the same message_id
+    existing = (
+        db.query(Feedback).filter(Feedback.message_id == request.message_id).first()
+        if request.message_id else None
+    )
+    if existing:
+        existing.rating = clean_rating
+        if request.comment is not None:
+            existing.comment = request.comment
+        if request.session_id and not existing.session_id:
+            existing.session_id = request.session_id
+        existing.created_at = datetime.utcnow()
+        fb = existing
+    else:
+        fb = Feedback(
+            id=f"fb_{uuid.uuid4().hex[:12]}",
+            session_id=request.session_id,
+            message_id=request.message_id,
+            rating=clean_rating,
+            comment=request.comment
+        )
+        db.add(fb)
+
     db.commit()
 
     # Synchronize feedback with LangSmith trace if available
@@ -567,8 +641,55 @@ def submit_feedback(request: FeedbackRequest, db: Session = Depends(get_db)):
         "status": "success",
         "feedback_id": fb.id,
         "rating": clean_rating,
+        "is_correct": clean_rating == "up",
+        "verdict": "Correct" if clean_rating == "up" else "Incorrect",
         "langsmith_synced": bool(langsmith_target)
     }
+
+
+@router.get("/feedback", tags=["Conversational RAG"], summary="Track Answer Correctness & Feedback History")
+def list_feedback_history(
+    verdict: Optional[str] = Query(None, description="Filter by 'correct'/'up' or 'incorrect'/'down'"),
+    subject: Optional[str] = Query(None, description="Optional subject short name filter e.g. 'DSA'"),
+    limit: int = Query(100, ge=1, le=500),
+    db: Session = Depends(get_db),
+):
+    rows = db.query(Feedback).order_by(Feedback.created_at.desc()).all()
+    resolved = [_resolve_feedback_qa(db, fb) for fb in rows]
+
+    if subject and subject.strip().lower() != "all":
+        subj_clean = subject.strip().upper()
+        resolved = [r for r in resolved if (r["subject"] or "").upper() == subj_clean]
+
+    total_rated = len(resolved)
+    correct_count = sum(1 for r in resolved if r["is_correct"])
+    incorrect_count = total_rated - correct_count
+    accuracy_pct = round((correct_count / total_rated) * 100, 1) if total_rated else 0.0
+
+    if verdict and verdict.strip().lower() != "all":
+        v_low = verdict.strip().lower()
+        want_correct = v_low in ("correct", "up", "1", "true")
+        resolved = [r for r in resolved if r["is_correct"] == want_correct]
+
+    return {
+        "summary": {
+            "total_rated": total_rated,
+            "correct_count": correct_count,
+            "incorrect_count": incorrect_count,
+            "accuracy_pct": accuracy_pct,
+        },
+        "records": resolved[:limit],
+    }
+
+
+@router.delete("/feedback/{feedback_id}", tags=["Conversational RAG"], summary="Delete a Feedback Entry")
+def delete_feedback_entry(feedback_id: str, db: Session = Depends(get_db)):
+    fb = db.query(Feedback).filter(Feedback.id == feedback_id).first()
+    if not fb:
+        raise HTTPException(status_code=404, detail="Feedback entry not found")
+    db.delete(fb)
+    db.commit()
+    return {"status": "deleted", "feedback_id": feedback_id}
 
 # --- Section 10: Conversational RAG & Coaching Endpoints ---
 
@@ -586,7 +707,7 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Chat service not initialized")
 
     filters_dict = request.filters.dict(exclude_none=True) if request.filters else {}
-    
+
     try:
         response = _chat_service.process_turn(
             db=db,
@@ -598,7 +719,9 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
             top_k=request.top_k,
             language_pref=request.language,
             mode=request.mode,
-            user_id=request.user_id
+            user_id=request.user_id,
+            branch=request.branch or filters_dict.get("branch"),
+            year=request.year or filters_dict.get("year")
         )
         return response
     except Exception as e:
@@ -648,7 +771,7 @@ def list_papers(
     if year:
         query = query.filter(Paper.year == year)
 
-    papers = query.order_by(Paper.year.desc()).all()
+    papers = query.distinct().order_by(Paper.year.desc()).all()
     results = []
     for p in papers:
         subj = p.subject
@@ -706,13 +829,19 @@ def serve_paper_pdf(paper_id: str, db: Session = Depends(get_db)):
     if not paper:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Paper not found")
 
-    pdf_path = settings.WORKSPACE_ROOT / "cleaned_dataset" / paper.relative_path
-    if not pdf_path.exists():
-        candidate = settings.WORKSPACE_ROOT / "cleaned_dataset" / paper.source_pdf
-        if candidate.exists():
-            pdf_path = candidate
-        else:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Physical PDF file not found at {pdf_path}")
+    rel = paper.relative_path or ""
+    candidates = [
+        settings.WORKSPACE_ROOT / rel,
+        settings.WORKSPACE_ROOT / "cleaned_dataset" / rel,
+        settings.WORKSPACE_ROOT / "cleaned_dataset" / (paper.source_pdf or ""),
+        settings.STORAGE_DIR / "student_uploads" / (paper.source_pdf or ""),
+    ]
+    pdf_path = next((c for c in candidates if rel and c.exists() and c.is_file()), None)
+    if pdf_path is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Physical PDF file not found for {paper.source_pdf}"
+        )
 
     return FileResponse(
         path=str(pdf_path),

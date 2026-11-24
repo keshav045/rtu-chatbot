@@ -42,10 +42,10 @@ class Settings(BaseSettings):
     HYBRID_CANDIDATE_K: int = 25
     FINAL_TOP_K: int = 5
     RRF_K: int = 60
-    # Citation threshold: only attach citations when top rerank score >= this value.
-    # -6.0 is the right cutoff for the ms-marco-MiniLM-L-6-v2 cross-encoder.
-    # Scores < -6.0 indicate the retrieved doc is not genuinely relevant to the query.
-    OUT_OF_SCOPE_THRESHOLD: float = -6.0
+    # Refusal vs citation confidence cutoffs for ms-marco-MiniLM-L-6-v2 cross-encoder:
+    # Genuine off-topic queries score < -10.5; partially covered RTU syllabus topics can score ~ -8.0.
+    OUT_OF_SCOPE_THRESHOLD: float = -9.5
+    CITATION_RELEVANCE_THRESHOLD: float = -6.0
 
     # LLM Settings
     DEFAULT_LLM_PROVIDER: str = "ollama"  # 'ollama', 'groq', 'gemini', 'openai', 'offline'

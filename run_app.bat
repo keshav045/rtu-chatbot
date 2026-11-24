@@ -12,6 +12,6 @@ echo 2. Waiting for backend to initialize FAISS and database...
 timeout /t 3 >nul
 
 echo 3. Starting Streamlit UI...
-start "RTU AI Streamlit UI" cmd /k "cd /d "%~dp0" && streamlit run streamlit_app.py"
+start "RTU AI Streamlit UI" cmd /k "cd /d "%~dp0" && set BACKEND_URL=http://127.0.0.1:8000 && streamlit run streamlit_app.py"
 
 echo All services launched.

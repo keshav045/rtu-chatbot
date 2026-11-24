@@ -119,7 +119,9 @@ def send_feedback_to_langsmith(
         logger.info(f"Successfully recorded user feedback in LangSmith for run: {run_id}")
         return True
     except Exception as e:
-        logger.warning(f"Failed to record LangSmith feedback for run {run_id}: {e}")
+        # BUG-20 FIX: Restricted/read-only API keys return HTTP 403 on /feedback; log at DEBUG
+        # to avoid flooding server logs with noisy tracebacks on every chat/feedback turn.
+        logger.debug(f"LangSmith feedback skipped for run {run_id}: {e}")
         return False
 
 
@@ -151,7 +153,8 @@ def send_screening_eval_to_langsmith(
             )
         return True
     except Exception as e:
-        logger.warning(f"Failed to record screening evaluation in LangSmith for run {run_id}: {e}")
+        # BUG-20 FIX: Suppress noisy 403 warning tracebacks when API key lacks feedback write scope.
+        logger.debug(f"LangSmith screening feedback skipped for run {run_id}: {e}")
         return False
 
 

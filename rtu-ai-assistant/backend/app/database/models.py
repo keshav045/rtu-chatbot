@@ -177,6 +177,8 @@ class User(Base):
 
     branch = relationship("Branch", back_populates="users")
     sessions = relationship("SessionModel", back_populates="user", cascade="all, delete-orphan")
+    memories = relationship("StudentMemory", back_populates="user", cascade="all, delete-orphan")
+    topic_masteries = relationship("TopicMastery", back_populates="user", cascade="all, delete-orphan")
 
 class SessionModel(Base):
     __tablename__ = "sessions"
@@ -243,3 +245,39 @@ class Feedback(Base):
     rating = Column(String(10), nullable=False)  # up | down
     comment = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+class StudentMemory(Base):
+    """
+    Long-Term Memory store for student facts, preferences, study goals,
+    and cross-session episodic summaries.
+    """
+    __tablename__ = "student_memories"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
+    category = Column(String(50), default="academic_fact")  # academic_fact | study_goal | preference | episodic_summary
+    content = Column(Text, nullable=False)
+    importance_weight = Column(Float, default=1.0)  # 1.0 = standard, 2.0 = critical exam deadline/priority
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = relationship("User", back_populates="memories")
+
+class TopicMastery(Base):
+    """
+    Tracks topic-level student competency, weak spots, practice frequency,
+    and mastery scores across sessions.
+    """
+    __tablename__ = "topic_mastery"
+
+    id = Column(String(50), primary_key=True)
+    user_id = Column(String(50), ForeignKey("users.id"), nullable=False, index=True)
+    subject_code = Column(String(50), nullable=False, index=True)  # e.g. "3CS4-05", "DBMS", "OS"
+    topic_name = Column(String(150), nullable=False, index=True)
+    confidence_score = Column(Float, default=0.5)  # 0.0 (struggling) to 1.0 (mastered)
+    attempts_count = Column(Integer, default=1)
+    is_weak_area = Column(Boolean, default=False, index=True)
+    notes = Column(Text, nullable=True)  # Specific struggle, e.g. "Confused by B-tree splitting"
+    last_studied_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="topic_masteries")

@@ -10,7 +10,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, HTMLResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
@@ -20,7 +20,7 @@ if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
 from app.core.config import settings
-from app.database.session import SessionLocal
+from app.database.session import SessionLocal, init_db
 from app.retrieval.pipeline import RetrievalPipeline
 from app.services.chat_service import ChatService
 from app.core.tracer import setup_langsmith_tracing
@@ -45,6 +45,8 @@ logger = logging.getLogger("rtu.app")
 async def lifespan(app: FastAPI):
     logger.info("Initializing RTU AI Academic Assistant Backend...")
     setup_langsmith_tracing()
+    # BUG-5 FIX: Ensure all SQLAlchemy tables (including student_memories, topic_mastery) exist at startup.
+    init_db()
     db = SessionLocal()
     try:
         pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
@@ -60,7 +62,7 @@ async def lifespan(app: FastAPI):
         importance_service = ImportanceService()
         planner_service = PlannerService()
         quiz_service = QuizService()
-        upload_service = UploadService()
+        upload_service = UploadService(pipeline=pipeline)
 
         init_services(
             chat_svc=chat_service,
@@ -162,10 +164,24 @@ def api_info():
         "api_prefix": settings.API_PREFIX
     }
 
-# Mount static pure HTML/CSS/JS frontend
+# Mount static pure HTML/CSS/JS frontend (or fallback landing page so root does not 404)
 FRONTEND_DIR = settings.ASSISTANT_ROOT / "frontend"
 if FRONTEND_DIR.exists():
     app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
+else:
+    @app.get("/", response_class=HTMLResponse, include_in_schema=False)
+    def root_landing():
+        return (
+            "<html><head><title>RTU AI Academic Assistant</title></head>"
+            "<body style='font-family:sans-serif;max-width:680px;margin:40px auto;line-height:1.6'>"
+            "<h1>RTU AI Academic Assistant Backend</h1>"
+            "<p>FastAPI service is running.</p>"
+            "<ul>"
+            "<li><a href='/docs'>Interactive API Docs (/docs)</a></li>"
+            "<li><a href='/api/health'>System Health (/api/health)</a></li>"
+            "<li>Streamlit Student UI: <a href='http://127.0.0.1:8501'>http://127.0.0.1:8501</a></li>"
+            "</ul></body></html>"
+        )
 
 if __name__ == "__main__":
     import uvicorn

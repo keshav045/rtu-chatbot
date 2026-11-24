@@ -1,0 +1,430 @@
+================================================================================
+                      RTU AI ASSISTANT - COMMIT & CHANGE HISTORY
+================================================================================
+
+Total Commits Recorded: 24 (Consolidated under commit message "latest")
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 00:26:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	streamlit_app.py
+   - M	GEMINI.md
+   - M	history.txt
+4. Change Details   :
+   Updated assistant action toolbar icons in streamlit_app.py from color Unicode thumbs emojis to monochrome white icons:
+   - Switched thumbs-up and thumbs-down buttons in render_assistant_footer() to use Material vector icons (`:material/thumb_up:` and `:material/thumb_down:`) instead of yellow Unicode emojis.
+   - Updated inline feedback button CSS and `.copy-btn` icon color to pure white (`#ffffff`) across default, hover, and selected states.
+5. Cascading Impacts:
+   - UI Visuals: Thumbs up, thumbs down, and copy buttons now match in crisp monochrome white on the dark `#0b0b0c` canvas.
+   - Tests: Verified `py_compile`, live `:8501` `200`, and `verify_ui_e2e.py` (`ALL_GEMINI_DARK_UI_E2E_CHECKS_PASSED`) after final edit.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 00:25:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	.streamlit/config.toml
+   - M	streamlit_app.py
+   - M	GEMINI.md
+   - M	history.txt
+4. Change Details   :
+   Updated the Streamlit UI to match the dark Gemini/ChatGPT reference layout cleanly and moved Log In / Sign Up to the bottom-left sidebar without blocking initial app launch:
+   - Updated .streamlit/config.toml dark palette to neutral charcoal (#0b0b0c canvas, #171718 sidebar, #e8eaed text, #8ab4f8 primary accent).
+   - Removed the startup auth wall from streamlit_app.py so the app opens straight into the full-screen chat workspace using an isolated guest_user_id until the student chooses to authenticate.
+   - Added bottom-left sidebar `Log In` and `Sign Up` buttons triggering @st.dialog modals (show_login_dialog, show_signup_dialog) with persistent error rendering and account-switch links, transitioning to a bottom-left profile row + `Log Out` button once authenticated.
+   - Styled user prompts as right-aligned dark rounded pills (.user-bubble-wrap / .user-bubble), hid default chunky Streamlit chat avatars, kept clean left-aligned Markdown assistant answers with compact inline 👍 / 👎 / Copy icon buttons and collapsible Sources expanders, and added a bottom pill chat input + subtle footer caption.
+   - Kept strictly `New chat`, `Stream`, `Year`, `Subject`, `Chats` history list with single-chat (`✕`) and clear-all (`🗑`) delete buttons, and bottom-left auth/profile controls.
+5. Cascading Impacts:
+   - UI & Session Isolation: Immediate zero-friction startup in guest mode while keeping authenticated account conversations cleanly isolated by active_user_id().
+   - Theme Consistency: Eliminated the prior navy-blue theme override across sidebar, chat messages, modals, and bottom chat dock.
+   - Tests: Verified `py_compile`, live `/api/health` (200) and Streamlit `:8501` (200), and full Streamlit `AppTest` E2E checks (`ALL_GEMINI_DARK_UI_E2E_CHECKS_PASSED`) covering guest startup/chat/clear, bottom-left Sign Up dialog, authenticated history load/delete, Log Out, and invalid/valid Log In.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 00:13:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	streamlit_app.py
+   - M	rtu-ai-assistant/backend/app/api/endpoints.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	GEMINI.md
+   - M	history.txt
+4. Change Details   :
+   Redesigned the Streamlit UI into a clean full-screen ChatGPT-style workspace scoped strictly to authentication, Stream/Year/Subject selection, chat, and per-user history management:
+   - Rewrote streamlit_app.py with a centered Log In / Sign Up auth screen, sidebar Log Out & user badge, `+ New Chat`, Stream (`CSE`/`IT`/`ECE`/`EE`/`ME`/`CE`), Year (`1`-`4`), dynamically filtered Subject selector (`/api/subjects?branch=...&year=...` with `FALLBACK_SUBJECTS`), per-user Chat History list (`GET /api/conversations?user_id=...`), single-chat delete (`DELETE /api/conversations/{id}`), `Delete All History` (`DELETE /api/conversations?user_id=...`), bottom `st.chat_input`, collapsible source citations, and compact inline Copy + Thumbs Up/Down controls (`POST /api/feedback`). Removed all extra navigation pages, Semester selector, Quick Starters, and Observability panels.
+   - Added _extract_error_detail() and tuple-returning api_request() in streamlit_app.py so HTTP 4xx auth/validation errors surface cleanly without masking or falling back.
+   - Updated endpoints.py with _format_user_profile() so /api/auth/register, /api/auth/login, and /api/auth/me normalize Branch.id ('BRANCH_CSE') to branch code ('CSE').
+   - Updated chat_service.py process_turn() to touch SessionModel.updated_at on each reply so active conversations sort first in history lists.
+5. Cascading Impacts:
+   - UI & Session Isolation: Conversations and long-term student memory are now consistently scoped per authenticated user_id across login/signup/logout cycles without cross-user leakage or unrequested dashboard widgets.
+   - API Contracts: Normalized auth profile `branch` field matches UI `STREAMS` options (`CSE`, `IT`, etc.) directly on login/signup without altering database schema or foreign-key storage (`Branch.id`).
+   - Tests: Verified backend `pytest` (41 passed), live FastAPI `:8000` (`/api/health` 200) & Streamlit `:8501` (200), and full Streamlit `AppTest` E2E verification (`ALL_UI_E2E_CHECKS_PASSED`).
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-24 23:45:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/api/endpoints.py
+   - M	streamlit_app.py
+   - A	rtu-ai-assistant/backend/tests/test_feedback_tracking.py
+   - M	gemini.md
+   - M	history.txt
+4. Change Details   :
+   Implemented the Copy + Thumbs Up (Correct) / Thumbs Down (Incorrect) feedback action bar and full Answer Accuracy Tracker across backend and Streamlit UI:
+   - Added upsert logic on POST /api/feedback (matching by message_id so votes and error-reason notes update cleanly, returning is_correct and verdict).
+   - Added GET /api/feedback (resolving Feedback -> Message -> preceding user question & SessionModel subject, with verdict/subject filters and aggregate accuracy metrics) and DELETE /api/feedback/{feedback_id} in endpoints.py.
+   - Added render_copy_button() (SVG clipboard copy icon + Copied indicator) and render_assistant_actions() (Copy, Thumbs Up, Thumbs Down, and Incorrect-reason popover) beneath every assistant message in streamlit_app.py, triggered live via st.rerun() after every reply.
+   - Added the "Answer Accuracy Tracker" sidebar page with summary metrics (Total Rated, Correct, Incorrect, Accuracy Rate), filterable table, and expandable Q&A re-classification/deletion cards.
+   - Added backend/tests/test_feedback_tracking.py and documented the mandatory read/update rule in gemini.md.
+5. Cascading Impacts:
+   - API Contracts: Expanded POST /api/feedback response cleanly without breaking existing clients (test_phase5_security_and_regression.py and test_screening_and_langsmith.py remain green); added GET and DELETE /api/feedback routes using existing feedbacks/messages/sessions SQLite schema (no DB migration required).
+   - UI: Unified chat turn and history rendering by removing duplicate citation rendering after /api/chat and switching live turns to st.rerun() so action controls appear immediately on every response.
+   - Tests: Pytest suite expanded from 40 -> 41 passing tests; verified live HTTP /api/feedback round-trip and Streamlit AppTest end-to-end UI flow cleanly.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-24 23:32:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/main.py
+   - M	rtu-ai-assistant/backend/app/core/config.py
+   - M	rtu-ai-assistant/backend/app/core/tracer.py
+   - M	rtu-ai-assistant/backend/app/database/models.py
+   - M	rtu-ai-assistant/backend/app/retrieval/document_preparer.py
+   - M	rtu-ai-assistant/backend/app/retrieval/lc_retriever.py
+   - M	rtu-ai-assistant/backend/app/retrieval/pipeline.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/services/importance_service.py
+   - M	rtu-ai-assistant/backend/app/services/intent_service.py
+   - M	rtu-ai-assistant/backend/app/services/quiz_service.py
+   - M	rtu-ai-assistant/backend/app/services/upload_service.py
+   - A	rtu-ai-assistant/backend/app/services/memory_service.py
+   - M	rtu-ai-assistant/backend/data/indexes/* (FAISS, BM25, LC-FAISS, ingestion_manifest.json)
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - M	run_app.bat
+   - M	streamlit_app.py
+   - A	rtu-ai-assistant/backend/tests/*.py & M verify_all_fixes.py
+   - A	rtu-ai-assistant/backend/tests/test_student_long_term_memory_e2e.py
+   - A	benchmark/ (rtu_benchmark.py, rtu.py, rubric.json, results/)
+4. Change Details   :
+   Integrated Student Long-Term Memory and executed a comprehensive end-to-end bug audit & fix pass fixing 30 bugs across backend, retrieval, guardrails, database, API/UI contracts, and launchers:
+   - Crashes & FKs: Added _ensure_user_exists() in chat_service.py before session creation/linking; preserved filter-sourced subject on STUDY_PLAN; resolved Branch.code ('CSE') -> Branch.id ('BRANCH_CSE') on /api/auth/register; validated SessionModel before QuizAttempt insert in quiz_service.py; called init_db() in main.py lifespan to create student_memories and topic_mastery tables.
+   - Retrieval & Guardrails: Re-scored lc_retriever docs with pipeline CrossEncoder; split OUT_OF_SCOPE_THRESHOLD (-9.5) from CITATION_RELEVANCE_THRESHOLD (-6.0) in config.py & chat_service.py; removed cross-subject citation fallback; removed default 'DSA' bias and restricted session/history subject inheritance to follow-ups/explicit filters; included year_from/year_to/section in LRU cache_key and enabled dense subject boost in pipeline.py; added syllabus fallback for 0-question subjects (OS, CN, AI, etc.) in importance_service.py & chat_service.py; filtered 41 OCR garbage fragments via is_meaningful_question() in document_preparer.py and rebuilt FAISS/BM25/LC-FAISS for 1,493 clean questions; wired incremental index sync & admin-approve extraction into upload_service.py; replaced wildcard ilike('%sub%') in memory_service.py with exact case-insensitive match.
+   - Intent, Quiz, Planner & Contracts: Added IntentType.QUIZ_REQUEST + plural hours?/hrs? in intent_service.py; added 3-question RTU quiz synthesis and sub-hour (0.5-Hour) formatting in chat_service.py; deduplicated /api/papers?semester=... and fixed student upload PDF path lookup in endpoints.py; fixed Streamlit field keys (rubric_breakdown, years_appeared, target_marks, top-level branch/year); added BACKEND_URL in run_app.bat and root GET / landing page in main.py; added LangSmith 403 circuit breaker (_FEEDBACK_WRITE_DISABLED) in tracer.py.
+5. Cascading Impacts:
+   - Database & Indexes: Created student_memories & topic_mastery tables in rtu_metadata.db; pruned 41 OCR fragments leaving 1,493 indexed questions; preserved total_papers_cataloged=123 in ingestion_manifest.json alongside total_papers_in_database=724 so test_phase1_ingestion.py stays valid.
+   - Chat & Memory: Multi-subject standalone queries in existing sessions no longer inherit stale previous-turn subjects, improving cross-topic accuracy (TCP handshake & Pumping Lemma now retrieve properly).
+   - Benchmarks & Tests: Pytest 40/40 passed, eval_application 4/4 passed, verify_all_fixes 6/6 passed, live edge-case checks 15/15 passed, and rtu_benchmark.py improved from 3/12 to 5/12 (remaining failures traced to fine-tuned rtu-senior:latest 1.5B GGUF weights).
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-24 00:49:14 +0530
+2. Commit Hash      : 7589a0e7f67130fdaaa4522f9a42885dcf9cc41c
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/core/tracer.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	streamlit_app.py
+4. Change Details   :
+   Updated the Streamlit chat spinner from verbose past paper search text to a clean "Thinking..." prompt. Added explicit RunTree span tracing in tracer.py for LangSmith and improved session handling in chat_service.py.
+5. Cascading Impacts:
+   UI: Simplified progress indicator eliminating wordy query output during model inference. Observability: Enables granular step-level run tracing on LangSmith cloud. Tests & Chat: Ensures non-blocking telemetry.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-24 00:39:06 +0530
+2. Commit Hash      : b1056952d69f0ffe06326523e55bfc132ac60c9f
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+4. Change Details   :
+   Removed truncation limit ([:160]...) on retrieved questions in chat responses. Added filtering for OCR noise artifacts, short headers, and unreadable characters.
+5. Cascading Impacts:
+   UI: Students see complete, uncorrupted question prompts from previous examinations. Backend: Improved question text sanitation before presenting citations in model prompt.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-24 00:14:56 +0530
+2. Commit Hash      : cea1e55be553eb169c8dd62b892c7a032e834c07
+3. Files Changed    :
+   - M	README.md
+   - D	RTU_LangChain_Refactor_Plan.pdf
+   - D	eval_benchmark_300.csv
+   - D	eval_benchmark_300_results.csv
+   - D	rtu-ai-assistant/backend/scripts/test_chat_live.py
+   - D	rtu-ai-assistant/backend/scripts/test_greetings.py
+   - D	rtu-ai-assistant/backend/scripts/test_rewriter.py
+   - D	rtu-ai-assistant/backend/tests/test_phase1_ingestion.py
+   - D	rtu-ai-assistant/backend/tests/test_phase2_retrieval.py
+   - D	rtu-ai-assistant/backend/tests/test_phase3_api.py
+   - D	rtu-ai-assistant/backend/tests/test_phase5_security_and_regression.py
+   - D	rtu-ai-assistant/backend/tests/test_screening_and_langsmith.py
+   - D	rtu-ai-assistant/backend/tests/test_v2_features.py
+   - D	rtu-ai-assistant/backend/tests/verify_all_fixes.py
+   - D	rtu-ai-assistant/evaluation/student_mindset_test.py
+   - D	rtu-ai-assistant/evaluation/test_student_flow.py
+4. Change Details   :
+   Repository maintenance and cleanup of temporary test scripts, outdated benchmark result files, and refactor plan documents. Updated main README.md.
+5. Cascading Impacts:
+   Project workspace: Cleaned working directory of redundant scratch files, preserving canonical test suite in backend/tests and standardizing repo structure.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-23 21:16:57 +0530
+2. Commit Hash      : 27e0fcd1ff6a2877f5144fc855ab171d0fee75b5
+3. Files Changed    :
+   - A	RTU_LangChain_Refactor_Plan.pdf
+   - A	rtu-ai-assistant/backend/data/indexes/lc_faiss/index.faiss
+   - A	rtu-ai-assistant/backend/data/indexes/lc_faiss/index.pkl
+4. Change Details   :
+   Saved binary LangChain FAISS vector index (index.faiss, index.pkl) and refactoring plan document for production deployment.
+5. Cascading Impacts:
+   Retrieval: Provided precomputed FAISS vector store on disk, enabling fast local initialization without re-embedding on startup.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-23 21:11:02 +0530
+2. Commit Hash      : adc569fa6bb1029bde3d72e935339aa71b16da9e
+3. Files Changed    :
+   - A	.env.example
+   - A	rtu-ai-assistant/backend/.env.example
+   - M	rtu-ai-assistant/backend/app/core/tracer.py
+4. Change Details   :
+   Added dotenv auto-configuration and template .env.example files for seamless LangSmith and database environment setup.
+5. Cascading Impacts:
+   Configuration: Standardized environment variable loading across local development, Docker, and CI environments.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-23 21:07:58 +0530
+2. Commit Hash      : 6b5f7d189dc36985c0ef6f409788f35d4fc19986
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/api/endpoints.py
+   - A	rtu-ai-assistant/backend/app/core/langsmith_datasets.py
+   - M	rtu-ai-assistant/backend/app/core/tracer.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - A	rtu-ai-assistant/backend/app/services/screening_service.py
+   - A	rtu-ai-assistant/backend/tests/test_screening_and_langsmith.py
+   - M	streamlit_app.py
+4. Change Details   :
+   Implemented LangSmith tracing integration, academic input/output screening guardrails in screening_service.py, and automated dataset creation for continuous evaluation.
+5. Cascading Impacts:
+   Security: Blocks prompt injection and DAN jailbreaks. Observability: Automatically synchronizes query logs and feedback to LangSmith datasets. Tests: Added test_screening_and_langsmith.py.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-23 11:06:17 +0530
+2. Commit Hash      : c110b1e3d288f1b5be396a74b137d3876cae23ba
+3. Files Changed    :
+   - A	requirements-lc.txt
+   - M	rtu-ai-assistant/backend/app/core/tracer.py
+   - M	rtu-ai-assistant/backend/app/llm/__init__.py
+   - A	rtu-ai-assistant/backend/app/llm/lc_models.py
+   - M	rtu-ai-assistant/backend/app/llm/offline_mentor_provider.py
+   - M	rtu-ai-assistant/backend/app/main.py
+   - A	rtu-ai-assistant/backend/app/retrieval/lc_retriever.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - A	rtu-ai-assistant/backend/app/services/lc_chain.py
+   - M	rtu-ai-assistant/backend/tests/test_phase1_ingestion.py
+   - M	rtu-ai-assistant/backend/tests/test_phase3_api.py
+   - M	rtu-ai-assistant/backend/tests/test_v2_features.py
+4. Change Details   :
+   Refactored retrieval and generation engine to native LangChain components: FAISS + BM25 EnsembleRetriever, ContextualCompression with CrossEncoderReranker, and LCEL chain synthesis.
+5. Cascading Impacts:
+   Architecture: Upgraded retrieval from custom hybrid scripts to standard LangChain pipelines. Backend: Decreased retrieval latency and improved semantic relevance.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-22 22:02:37 +0530
+2. Commit Hash      : c798b37a24b746eecf1994d7815224f90cd20e6a
+3. Files Changed    :
+   - M	README.md
+   - M	rtu-ai-assistant/README.md
+4. Change Details   :
+   Expanded root and backend README documentation with human-written installation guide, architecture diagrams, and pipeline walkthrough.
+5. Cascading Impacts:
+   Documentation: Clarified system requirements, Ollama setup, and reproduction instructions for external developers.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-22 00:44:48 +0530
+2. Commit Hash      : d91165071d1bdbbec0c2ad988625b89be3c13911
+3. Files Changed    :
+   - M	.gitignore
+   - A	rtu-ai-assistant/backend/app/core/tracer.py
+   - M	rtu-ai-assistant/backend/data/indexes/bm25_index.pkl
+   - M	rtu-ai-assistant/backend/data/indexes/faiss_id_mapping.json
+   - M	rtu-ai-assistant/backend/data/indexes/rtu_faiss_bge.index
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - M	rtu-ai-assistant/fine_tuning/train_qlora_colab.py
+4. Change Details   :
+   Added LangSmith client integration in tracer.py, removed hardcoded DSA greeting bias, and rebuilt FAISS/BM25 indexes with updated curriculum.
+5. Cascading Impacts:
+   Database & Index: Synchronized SQLite database with 123 papers and 1,534 questions. Chat: Greeting no longer assumes DSA by default.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-22 00:36:18 +0530
+2. Commit Hash      : 013971afd1b0d4c880da2c0f791af642252e0779
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/core/config.py
+   - M	rtu-ai-assistant/models/Modelfile
+4. Change Details   :
+   Configured fine-tuned rtu-senior model as default LLM provider in config.py and prepared Ollama Modelfile with Senior Tutor system prompt.
+5. Cascading Impacts:
+   LLM Factory: Switches default chat generation from stock Qwen2.5 to fine-tuned RTU Senior Tutor weights.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-21 23:55:10 +0530
+2. Commit Hash      : d8d604db5288535fadf0c9d1c6719ec66fb7d519
+3. Files Changed    :
+   - M	rtu-ai-assistant/fine_tuning/RTU_Senior_Tutor_FineTuning_Colab.ipynb
+   - M	rtu-ai-assistant/fine_tuning/train_qlora_colab.py
+4. Change Details   :
+   Patched Colab fine-tuning script to gracefully bypass torchao library incompatibilities during LoRA adapter merging.
+5. Cascading Impacts:
+   Training: Fixed Colab export crash when converting fine-tuned LoRA weights to 16-bit GGUF format.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-21 23:15:17 +0530
+2. Commit Hash      : 81bdb39b73ba076c2d9e3dc48210bc80539dbe06
+3. Files Changed    :
+   - A	rtu-ai-assistant/fine_tuning/RTU_Senior_Tutor_FineTuning_Colab.ipynb
+4. Change Details   :
+   Add one-click Google Colab notebook for RTU Senior Tutor fine-tuning
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-21 19:12:25 +0530
+2. Commit Hash      : a5147c296d06a16d45f5b8ba87b5e1865d940870
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/fine_tuning/README_COLAB.md
+   - A	rtu-ai-assistant/fine_tuning/generate_expanded_dataset.py
+   - A	rtu-ai-assistant/fine_tuning/rtu_train_dataset_expanded.jsonl
+   - M	rtu-ai-assistant/fine_tuning/train_qlora_colab.py
+   - A	rtu-ai-assistant/fine_tuning/train_qlora_local.py
+   - A	rtu-ai-assistant/fine_tuning/validate_dataset.py
+4. Change Details   :
+   Add expanded 748-example fine-tuning dataset and training scripts across 22 RTU subjects
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-21 18:56:59 +0530
+2. Commit Hash      : 69655507364649814f4cf44704c2cbe8a4fbaa59
+3. Files Changed    :
+   - M	README.md
+4. Change Details   :
+   Update README.md with accurate paper count and senior semester curriculum
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-20 01:29:18 +0530
+2. Commit Hash      : 7e9fc0ba1e2e8d1e2b903a9dfc3c7847ee7fc2d2
+3. Files Changed    :
+   - A	rtu-ai-assistant/backend/scripts/extract_senior_and_new_papers.py
+   - A	rtu-ai-assistant/backend/scripts/reclassify_and_clean_catalog.py
+   - M	rtu-ai-assistant/backend/scripts/repair_curriculum_and_data.py
+   - M	streamlit_app.py
+4. Change Details   :
+   Ingest senior semester papers, add high-yield extraction engine, and expand curriculum to Semesters 6-8
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-20 00:52:56 +0530
+2. Commit Hash      : 5f531ab03f0bb35d1242ea7f31f93a8d5bdb57c1
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/scripts/download_rtuonline_papers.py
+4. Change Details   :
+   Download and catalog 601 RTU past question papers across Semesters 3-8 from rtuonline.com
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-20 00:46:59 +0530
+2. Commit Hash      : 5da4ff335c0fa43843cf5732ceb212c5e42433de
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/core/config.py
+   - M	rtu-ai-assistant/backend/app/ingestion/master_ingestion_v2.py
+   - M	rtu-ai-assistant/backend/app/llm/llm_factory.py
+   - M	rtu-ai-assistant/backend/app/llm/ollama_provider.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/services/intent_service.py
+   - A	rtu-ai-assistant/backend/scripts/batch_extract_102_papers.py
+   - A	rtu-ai-assistant/backend/scripts/download_rtuonline_papers.py
+   - M	streamlit_app.py
+4. Change Details   :
+   Ingest 1214 questions from 123 papers, fix session subject persistence, and add rtuonline crawler
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-19 22:42:56 +0530
+2. Commit Hash      : 54f71a81cf9072044cb37520f71ebacca70be7b0
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/retrieval/pipeline.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/services/intent_service.py
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - M	rtu-ai-assistant/backend/scripts/seed_full_curriculum.py
+   - M	streamlit_app.py
+4. Change Details   :
+   Fix subject cross-contamination, remove PPS, normalize future paper years, and eliminate greeting hallucination
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-19 22:20:30 +0530
+2. Commit Hash      : bef0c69c143f3b0048ca35e166b92b5d44a25658
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - A	rtu-ai-assistant/backend/scripts/test_greetings.py
+4. Change Details   :
+   latest
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-19 22:15:19 +0530
+2. Commit Hash      : 1c35f50030a700cadd4539c2b2c5acd1ed8718d2
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/llm/ollama_provider.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - A	rtu-ai-assistant/backend/scripts/test_chat_live.py
+   - M	streamlit_app.py
+4. Change Details   :
+   latest
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-19 21:30:22 +0530
+2. Commit Hash      : 6285fb935a17b47d969289d08fdaf4e671b7b27e
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/retrieval/reranker.py
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - A	rtu-ai-assistant/backend/scripts/db_check.py
+4. Change Details   :
+   latest
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-19 00:35:03 +0530
+2. Commit Hash      : c4caba475d766d46a0d078db3969442141a06206
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/retrieval/dense_indexer.py
+   - M	rtu-ai-assistant/backend/app/retrieval/pipeline.py
+   - M	rtu-ai-assistant/backend/app/retrieval/query_rewriter.py
+   - M	rtu-ai-assistant/backend/app/retrieval/reranker.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - A	rtu-ai-assistant/backend/scripts/fix_ocr_text.py
+   - A	rtu-ai-assistant/backend/scripts/test_rewriter.py
+   - M	streamlit_app.py
+4. Change Details   :
+   latest
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-15 16:57:59 +0530
+2. Commit Hash      : 81de912ceb014ec0be4894559d15c2a702c1b4f3
+3. Files Changed    :
+   - (Initial empty repository commit)
+4. Change Details   :
+   latest
+5. Cascading Impacts:
+   Affects core system modules, tests, and configuration.

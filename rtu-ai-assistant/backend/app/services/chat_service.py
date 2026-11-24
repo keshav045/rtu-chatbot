@@ -8,6 +8,7 @@ import re
 import time
 import uuid
 import logging
+from datetime import datetime
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 
@@ -25,6 +26,7 @@ from app.services.importance_service import ImportanceService
 from app.services.planner_service import PlannerService
 from app.services.intent_service import IntentRouter, IntentType
 from app.services.screening_service import AcademicScreeningService
+from app.services.memory_service import MemoryService
 from app.core.tracer import generate_trace_id, send_screening_eval_to_langsmith, start_trace, end_trace
 from app.core.config import settings
 from langchain_core.prompts import ChatPromptTemplate
@@ -39,7 +41,7 @@ Core Responsibilities:
    - Step-by-Step Algorithm, Working Mechanics, or Mathematical Derivation
    - Concrete Working Example with traced values
    - Time and Space Complexity (in Big-O notation where applicable)
-   - RTU Examiner Scoring Tip (actionable guidance on how examiners award 8 to 15 marks)
+   - RTU Examiner Scoring Strategy (actionable guidance on how examiners award 8 to 15 marks)
 2. Guide junior students on how to structure and present high-scoring answers following official RTU evaluation criteria.
 3. Strictly refuse out-of-syllabus or non-academic topics.
 
@@ -262,6 +264,22 @@ class ChatService:
 
     # --- Conversational RAG Turn Execution ---
 
+    @staticmethod
+    def _ensure_user_exists(db: Session, user_id: Optional[str]) -> None:
+        """Upserts a minimal User row so SessionModel.user_id foreign key always succeeds."""
+        if not user_id:
+            return
+        from app.database.models import User as UserModel
+        if not db.query(UserModel).filter(UserModel.id == user_id).first():
+            import hashlib
+            db.add(UserModel(
+                id=user_id,
+                name="Student",
+                roll_no=user_id,
+                password_hash=hashlib.sha256(user_id.encode()).hexdigest()
+            ))
+            db.flush()
+
     def process_turn(
         self,
         db: Session,
@@ -273,7 +291,9 @@ class ChatService:
         top_k: int = 5,
         language_pref: Optional[str] = None,
         mode: Optional[str] = None,
-        user_id: Optional[str] = None
+        user_id: Optional[str] = None,
+        branch: Optional[str] = None,
+        year: Optional[int] = None,
     ) -> Dict[str, Any]:
         """
         Executes a complete Conversational RAG turn:
@@ -293,17 +313,23 @@ class ChatService:
 
         filter_kwargs = filters or {}
         subject_filter = filter_kwargs.get("subject")
+        eff_branch = branch or filter_kwargs.get("branch") or "CSE"
+        eff_year = year or filter_kwargs.get("year") or 2
 
         if not session_obj:
+            self._ensure_user_exists(db, user_id)
             session_obj = self.create_session(
                 db=db,
                 session_id=actual_session_id,
                 subject_id=subject_filter,
+                branch=eff_branch,
+                year=eff_year,
                 mode=mode or "explain_topic",
                 user_id=user_id
             )
             actual_session_id = session_obj.id
         elif user_id and not session_obj.user_id:
+            self._ensure_user_exists(db, user_id)
             session_obj.user_id = user_id
 
         # 2. Extract recent history for conversational memory
@@ -328,7 +354,7 @@ class ChatService:
                     subject_in_history = u_ent.get("subject")
                     break
 
-        detected_subject = subject_in_query or subject_in_history
+        is_follow_up = self.query_rewriter.is_follow_up(self.query_rewriter.normalize_hinglish(user_message))
 
         # 2. Check what the assistant asked in the previous turn
         last_assistant_msg = ""
@@ -350,19 +376,45 @@ class ChatService:
             elif is_answering_past_papers:
                 intent = IntentType.PAST_YEAR_QUESTIONS
 
-        # Synchronize target subject & update session in DB if detected
-        raw_subj = detected_subject or filter_kwargs.get("subject") or (session_obj.subject_id if session_obj else None) or "DSA"
-        subj_record = db.query(Subject).filter(
-            (Subject.short_name == raw_subj) |
-            (Subject.id == raw_subj) |
-            (Subject.id == f"SUBJ_{raw_subj}") |
-            (Subject.code == raw_subj)
-        ).first()
+        # BUG-29 FIX: Only inherit subject from conversation history / session when
+        # the current turn is a follow-up or a contextual command without an explicit subject.
+        # Standalone new questions (e.g. TCP handshake after a DBMS turn) must search freely.
+        inherits_prior_subject = (
+            is_follow_up
+            or intent in (
+                IntentType.STUDY_PLAN,
+                IntentType.TOPIC_IMPORTANCE,
+                IntentType.PAST_YEAR_QUESTIONS,
+                IntentType.QUIZ_REQUEST,
+                IntentType.GREETING,
+            )
+        )
+        detected_subject = subject_in_query or (subject_in_history if inherits_prior_subject else None)
 
-        target_subject = subj_record.short_name if subj_record else (detected_subject or "DSA")
-        if subj_record and session_obj and session_obj.subject_id != subj_record.id:
-            session_obj.subject_id = subj_record.id
-            db.commit()
+        # Synchronize target subject & update session in DB if explicitly detected/filtered.
+        explicit_subj = (
+            detected_subject
+            or filter_kwargs.get("subject")
+            or ((session_obj.subject_id if session_obj else None) if inherits_prior_subject else None)
+        )
+        if explicit_subj and str(explicit_subj).strip().lower() != "all":
+            subj_record = db.query(Subject).filter(
+                (Subject.short_name == explicit_subj) |
+                (Subject.id == explicit_subj) |
+                (Subject.id == f"SUBJ_{explicit_subj}") |
+                (Subject.code == explicit_subj)
+            ).first()
+            target_subject = (
+                subj_record.short_name
+                if subj_record
+                else str(explicit_subj).replace("SUBJ_", "").strip().upper()
+            )
+            if (subject_in_query or filter_kwargs.get("subject")) and subj_record and session_obj and session_obj.subject_id != subj_record.id:
+                session_obj.subject_id = subj_record.id
+                db.commit()
+        else:
+            subj_record = None
+            target_subject = None
 
         rewritten_query = user_message
         retrieval_res = {}
@@ -370,12 +422,13 @@ class ChatService:
 
         # Trace and Screen Student Input
         trace_id = generate_trace_id()
+        _trace_subj = (target_subject or "general").lower()
         start_trace(
             run_id=trace_id,
             name=f"rtu_{intent.value.lower()}" if intent else "rtu_turn",
-            inputs={"message": user_message, "subject": target_subject, "mode": mode},
-            tags=["rtu-exam-coach", target_subject.lower()],
-            metadata={"subject": target_subject, "mode": mode, "language": language_pref}
+            inputs={"message": user_message, "subject": target_subject or "general", "mode": mode},
+            tags=["rtu-exam-coach", _trace_subj],
+            metadata={"subject": target_subject or "general", "mode": mode, "language": language_pref}
         )
         input_screening = AcademicScreeningService.screen_input(user_message, active_subject=target_subject)
         if not input_screening.is_safe:
@@ -407,15 +460,17 @@ class ChatService:
             citations_data = []
             retrieved_questions = []
             is_hinglish = language_pref == "hinglish" or any(w in user_message.lower() for w in ["bhai", "yaar", "namaste", "kya", "kaise", "haal", "ram ram", "pranam"])
+            subj_phrase = f"**{target_subject}** ka kaunsa" if target_subject else "kaunsa RTU subject ya"
+            subj_phrase_en = f"from **{target_subject}**" if target_subject else "from your RTU B.Tech subjects"
             if is_hinglish:
                 assistant_reply = (
                     f"Arre hello junior! Kaisi chal rahi hai RTU exam ki taiyari? "
-                    f"Aaj **{target_subject}** ka kaunsa concept, algorithm, ya past year question solve karna hai? Poocho!"
+                    f"Aaj {subj_phrase} concept, algorithm, ya past year question solve karna hai? Poocho!"
                 )
             else:
                 assistant_reply = (
                     f"Hello! Welcome to your RTU Exam Prep session. How is your preparation going? "
-                    f"Which topic, algorithm, or past paper question from **{target_subject}** would you like to prepare today?"
+                    f"Which topic, algorithm, or past paper question {subj_phrase_en} would you like to prepare today?"
                 )
 
         elif intent == IntentType.CLOSING:
@@ -483,7 +538,8 @@ class ChatService:
                 if not hours_avail:
                     hours_avail = session_obj.hours_left or 6.0
 
-                target_subject = detected_subject
+                # BUG-2 FIX: Preserve filter-sourced subject when message has no subject keyword.
+                target_subject = detected_subject or target_subject
                 importance_svc = ImportanceService()
                 planner_svc = PlannerService()
                 ranking_info = importance_svc.get_ranked_topics(db, target_subject)
@@ -499,25 +555,29 @@ class ChatService:
                     )
 
                 sched_bullets = []
-                for idx, s in enumerate(schedule[:int(hours_avail)]):
+                # BUG-13 FIX: int(0.5)==0 would slice schedule[:0]==[]; use ceil so sub-hour plans work.
+                import math as _math
+                _sched_count = max(1, _math.ceil(hours_avail))
+                for idx, s in enumerate(schedule[:_sched_count]):
                     hour_num = idx + 1
-                    if hour_num == int(hours_avail):
+                    if hour_num == _sched_count:
                         sched_bullets.append(
                             f"- **Hour {hour_num} (Final Hour)**: Rapid formula sheet & diagram revision across all units before exam."
                         )
                     else:
                         sched_bullets.append(
-                            f"- **Hour {hour_num}**: Focus on **{s.get('topic_name')}** ({s.get('target_marks', 10)} Marks)\n  *Strategy*: {s.get('strategy', 'Revise key definitions, block diagrams & working steps')}"
+                            f"- **Hour {hour_num}**: Focus on **{s.get('topic_name')}** ({s.get('duration_minutes', 45)}m | {s.get('marks_priority', '10 Marks')})\n  *Strategy*: {s.get('action', s.get('strategy', 'Revise key definitions, block diagrams & working steps'))}"
                         )
 
+                _hrs_str = f"{hours_avail:g}"
                 assistant_reply = (
-                    f"### RTU {subj_title} ({target_subject}): {hours_avail:.0f}-Hour Crash Plan\n\n"
-                    f"Aapke pass exam se pehle **{hours_avail:.0f} hours** hain. 123 RTU past papers (2012-2024) ke data-driven analysis ke mutabik in high-yield topics ko prioritize karo:\n\n"
+                    f"### RTU {subj_title} ({target_subject}): {_hrs_str}-Hour Crash Plan\n\n"
+                    f"Aapke pass exam se pehle **{_hrs_str} hours** hain. Verified RTU past papers ke data-driven analysis ke mutabik in high-yield topics ko prioritize karo:\n\n"
                     f"#### High-Yield Important Topics to Prioritize:\n"
                     + "\n".join(topic_bullets) + "\n\n"
                     f"#### Hour-by-Hour Study Roadmap:\n"
                     + "\n".join(sched_bullets) + "\n\n"
-                    f"#### RTU Examiner Scoring Tips:\n"
+                    f"#### RTU Examiner Presentation Guidelines:\n"
                     f"- **Part C (10/15 Marks)**: Har answer mein compulsory neat block diagram ya trace array zaroor banayein.\n"
                     f"- **Time & Space Complexity**: Har algorithm ke saath explicit recurrence relation aur $O(n)$ complexity likhein.\n"
                     f"- **Box Final Answers**: Numerical steps aur final derivations ko box mein highlight karein!"
@@ -761,50 +821,180 @@ class ChatService:
                 f"Which topic or question would you like to start with?"
             )
 
+        elif intent == IntentType.QUIZ_REQUEST:
+            from app.retrieval.document_preparer import is_meaningful_question
+            from app.database.models import Unit, Topic
+            num_match = re.search(r'\b([1-5])\s*(?:questions?|mcqs?|problems?)\b', user_message, re.I)
+            num_q = int(num_match.group(1)) if num_match else 3
+            quiz_subj = detected_subject or target_subject
+            citations_data = []
+            retrieved_questions = []
+
+            if not quiz_subj:
+                assistant_reply = (
+                    "I can quiz you using authentic RTU past examination questions. "
+                    "Please specify which RTU subject you would like to be tested on (such as DSA, DBMS, DCCN, OS, or TOC)."
+                )
+            else:
+                subj_obj = db.query(Subject).filter(
+                    (Subject.short_name == quiz_subj) |
+                    (Subject.id == f"SUBJ_{quiz_subj}") |
+                    (Subject.code == quiz_subj)
+                ).first()
+                subj_title = subj_obj.name if subj_obj else quiz_subj
+
+                quiz_items: List[str] = []
+                if subj_obj:
+                    raw_qs = (
+                        db.query(Question, Paper.year, Paper.source_pdf)
+                        .join(Paper, Question.paper_id == Paper.id)
+                        .filter(Paper.subject_id == subj_obj.id, Question.status == "approved")
+                        .order_by(Paper.year.desc())
+                        .limit(40)
+                        .all()
+                    )
+                    seen_q_norms = set()
+                    for q_rec, yr, pdf in raw_qs:
+                        txt = re.sub(r'\s+', ' ', (q_rec.text or "").strip())
+                        # Strip noisy leading question numbers/markers and embedded paper codes
+                        txt = re.sub(r'^(?:\(?[a-z0-9]{1,3}\)|Q\.?\s*\d+[\.\):]?)\s*', '', txt, flags=re.I)
+                        txt = re.sub(r'\[?\d[a-z]{1,3}\d{3,4}\]?|\bpage\s*\d+\s*of\s*\d*\b|\[\s*\d{3,5}\s*\]', '', txt, flags=re.I).strip()
+                        if not is_meaningful_question(txt) or len(txt) < 20 or len(txt) > 220:
+                            continue
+                        norm_k = txt[:40].lower()
+                        if norm_k in seen_q_norms:
+                            continue
+                        seen_q_norms.add(norm_k)
+                        # Format cleanly to end with '?' without extra '?' or trailing OCR brackets/digits
+                        q_body = txt.rstrip('.!? ').replace('?', ';')
+                        q_body = re.sub(r'[\(\[\{\s\d\.\,\-\:]+$', '', q_body).strip()
+                        if len(q_body) < 15:
+                            continue
+                        if not re.match(r'^(what|how|why|which|where|when|compare|explain|define|differentiate|write|discuss)\b', q_body, re.I):
+                            q_body = f"Explain {q_body}"
+                        quiz_items.append(f"{len(quiz_items) + 1}. [{yr} | {q_rec.marks or 8}M] {q_body}?")
+                        citations_data.append({
+                            "question_id": q_rec.id,
+                            "source_pdf": pdf,
+                            "page_number": q_rec.page_number or 1,
+                            "subject": quiz_subj,
+                            "year": yr,
+                            "section": q_rec.part or "Part B",
+                            "marks": q_rec.marks or 8
+                        })
+                        if len(quiz_items) >= num_q:
+                            break
+
+                    # Top up from syllabus topics if paper questions are fewer than num_q
+                    if len(quiz_items) < num_q:
+                        topics = (
+                            db.query(Topic)
+                            .join(Unit, Unit.id == Topic.unit_id)
+                            .filter(Unit.subject_id == subj_obj.id)
+                            .all()
+                        )
+                        for t in topics:
+                            t_clean = (t.name or "").strip().replace("?", "")
+                            if not t_clean:
+                                continue
+                            quiz_items.append(
+                                f"{len(quiz_items) + 1}. What are the core concepts, working steps, and applications of {t_clean} in {quiz_subj}?"
+                            )
+                            if len(quiz_items) >= num_q:
+                                break
+
+                if quiz_items:
+                    assistant_reply = (
+                        f"### RTU {subj_title} ({quiz_subj}) Practice Quiz\n\n"
+                        f"Attempt these {len(quiz_items)} questions from {subj_title}:\n\n"
+                        + "\n\n".join(quiz_items) + "\n\n"
+                        f"Reply with your answers below to receive rubric-based grading."
+                    )
+                else:
+                    assistant_reply = (
+                        f"### RTU {subj_title} ({quiz_subj}) Practice Quiz\n\n"
+                        f"1. Define the fundamental abstractions and core models covered in Unit 1 of {quiz_subj}?\n\n"
+                        f"2. Compare the major algorithms or design techniques used in {quiz_subj} with complexity trade-offs?\n\n"
+                        f"3. Describe a real-world engineering problem solved using {quiz_subj} principles?\n\n"
+                        f"Reply with your answers below to receive rubric-based grading."
+                    )
+
         elif intent == IntentType.OUT_OF_SYLLABUS:
             citations_data = []
             retrieved_questions = []
+
+            # Tailor acknowledgment to avoid duplicate copy-paste responses across off-topic questions
+            clean_q = user_message.strip().rstrip("?.!").lower()
+            if any(w in clean_q for w in ["cricket", "score", "match", "sport"]):
+                topic_context = "I do not track live match results or game statistics."
+                topic_context_hi = "Main live match results ya sports statistics provide nahi kar sakta."
+            elif any(w in clean_q for w in ["movie", "cinema", "film", "bollywood"]):
+                topic_context = "I do not provide entertainment suggestions or film reviews."
+                topic_context_hi = "Main entertainment suggestions ya films review nahi kar sakta."
+            elif any(w in clean_q for w in ["recipe", "biryani", "food", "cook", "dish"]):
+                topic_context = "I do not provide culinary instructions or meal preparation guides."
+                topic_context_hi = "Main culinary instructions ya dishes prepare karne ki recipe provide nahi kar sakta."
+            else:
+                topic_context = "I can only assist with academic engineering questions."
+                topic_context_hi = "Main sirf academic engineering sawalon mein madad kar sakta hoon."
+
             if language_pref == "hinglish" or any(w in user_message.lower() for w in ["kya", "bhai", "yaar"]):
                 assistant_reply = (
                     f"Arre junior, main aapka RTU B.Tech Exam Coach hoon aur main strictly aapke engineering syllabus par focus karta hoon!\n\n"
-                    f"Chalo exam ki taiyari par dhyan dete hain. **{target_subject}** ya kisi aur subject ka konsa topic prepare karna hai?"
+                    f"{topic_context_hi} Chalo exam ki taiyari par dhyan dete hain. "
+                    f"Which RTU engineering topic would you like to study? For example DBMS, OS, Computer Networks or Data Structures."
                 )
             else:
                 assistant_reply = (
                     f"I am your RTU B.Tech Exam Coach and I strictly stick to your official RTU engineering syllabus and past question papers!\n\n"
-                    f"Let's stay focused on your exam preparation. Which engineering topic or question from **{target_subject}** would you like to study?"
+                    f"{topic_context} Let's stay focused on your exam preparation. "
+                    f"Which RTU engineering topic would you like to study? For example DBMS, OS, Computer Networks or Data Structures."
                 )
 
         else:
             # IntentType.EXAM_QUESTION: Full Grounded Conversational RAG Turn
             rewritten_query = self.query_rewriter.rewrite(user_message, history_dicts)
 
-            # Check if target_subject has actual past papers in DB
-            target_subj_obj = db.query(Subject).filter(
-                (Subject.short_name == target_subject) |
-                (Subject.id == f"SUBJ_{target_subject}") |
-                (Subject.code == target_subject)
-            ).first()
-            subj_paper_count = len(target_subj_obj.papers) if target_subj_obj else 0
+            # BUG-6 & BUG-27 FIX: Check paper AND approved question counts only when target_subject is set.
+            if target_subject:
+                target_subj_obj = db.query(Subject).filter(
+                    (Subject.short_name == target_subject) |
+                    (Subject.id == f"SUBJ_{target_subject}") |
+                    (Subject.code == target_subject)
+                ).first()
+                subj_paper_count = len(target_subj_obj.papers) if target_subj_obj else 0
+                subj_question_count = (
+                    db.query(Question)
+                    .join(Paper, Question.paper_id == Paper.id)
+                    .filter(Paper.subject_id == target_subj_obj.id, Question.status == "approved")
+                    .count()
+                    if target_subj_obj else 0
+                )
+            else:
+                target_subj_obj = None
+                subj_paper_count = None
+                subj_question_count = None
+
+            is_unindexed_subject = bool(target_subject and (subj_paper_count == 0 or subj_question_count == 0))
+            full_subj_name = target_subj_obj.name if target_subj_obj else (target_subject or "Engineering Subject")
 
             retrieval_start = time.perf_counter()
-            if subj_paper_count == 0:
-                # Subject has 0 papers in database (e.g. PHY, CHEM, OS)
-                # DO NOT silently pull citations from unrelated subjects like OOP!
+            if is_unindexed_subject:
+                # Subject has 0 indexed questions in DB (e.g. PHY, CHEM, or unextracted Tier A/B like OS)
                 retrieval_res = {
                     "results": [],
                     "citations": [],
                     "context_string": "",
                     "retrieval_stats": {
                         "subject": target_subject,
-                        "papers_in_db": 0,
+                        "papers_in_db": subj_paper_count or 0,
+                        "questions_in_db": subj_question_count or 0,
                         "status": "NO_PAPERS_INDEXED_FOR_SUBJECT"
                     }
                 }
                 retrieval_latency_ms = 0.0
-                full_subj_name = target_subj_obj.name if target_subj_obj else target_subject
                 context_string = (
-                    f"NOTE FOR SENIOR TUTOR: Official RTU past examination papers for {target_subject} "
+                    f"NOTE FOR SENIOR TUTOR: Official RTU past examination questions for {target_subject} "
                     f"({full_subj_name}) are not yet compiled in the local database. "
                     f"Explain this concept thoroughly according to standard RTU B.Tech syllabus and marking scheme, "
                     f"without fabricating past year questions or citing questions from other subjects."
@@ -812,46 +1002,74 @@ class ChatService:
                 retrieved_questions = []
                 citations_data = []
             else:
-                # Retrieve relevant exam questions via LangChain Hybrid ContextualCompressionRetriever
-                try:
-                    lc_ret = self.get_lc_retriever(db)
-                    sources = lc_ret.invoke(rewritten_query)
-                except Exception:
-                    sources = []
+                has_metadata_filters = bool(
+                    target_subject
+                    or any(filter_kwargs.get(k) for k in ("semester", "year_from", "year_to", "section", "marks"))
+                )
+                use_pipeline_direct = has_metadata_filters
+                sources = []
 
-                if sources:
+                if not use_pipeline_direct:
+                    try:
+                        lc_ret = self.get_lc_retriever(db)
+                        sources = lc_ret.invoke(rewritten_query)
+                    except Exception:
+                        sources = []
+
+                if sources and not use_pipeline_direct:
+                    # BUG-3 FIX: Re-score LC CrossEncoderReranker docs via pipeline's CrossEncoder
+                    # so true relevance_score thresholds reject out-of-scope queries reliably.
+                    rescore_map: dict = {}
+                    if hasattr(self, 'pipeline') and self.pipeline and self.pipeline.reranker:
+                        try:
+                            _candidate_docs = [
+                                {"question_id": d.metadata.get("question_id", ""), "document_text": d.page_content, **d.metadata}
+                                for d in sources
+                            ]
+                            _rescored = self.pipeline.reranker.rerank(rewritten_query, _candidate_docs, top_k=len(sources))
+                            rescore_map = {r.get("question_id", ""): r.get("rerank_score", 0.0) for r in _rescored}
+                        except Exception:
+                            rescore_map = {}
+
                     raw_questions = []
                     raw_citations = []
                     for d in sources:
                         meta = d.metadata or {}
+                        qid = meta.get("question_id", "")
+                        _rerank_score = rescore_map.get(qid, meta.get("relevance_score", meta.get("rerank_score", 0.0)))
                         raw_questions.append({
-                            "question_id": meta.get("question_id", ""),
-                            "subject_short": meta.get("subject", target_subject),
-                            "subject": meta.get("subject_name", meta.get("subject", target_subject)),
+                            "question_id": qid,
+                            "paper_id": meta.get("paper_id", ""),
+                            "subject_id": meta.get("subject_id", ""),
+                            "subject_short": meta.get("subject", target_subject or ""),
+                            "subject": meta.get("subject_name", meta.get("subject", target_subject or "")),
                             "year": meta.get("year", 2022),
                             "section": meta.get("section", "Part B"),
                             "marks": meta.get("marks", 10),
                             "question_text": d.page_content,
                             "source_pdf": meta.get("source_pdf", "RTU_Exam.pdf"),
                             "page_number": meta.get("page_number", 1),
-                            "rerank_score": meta.get("relevance_score", 0.0),
+                            "rerank_score": _rerank_score,
                         })
                         raw_citations.append({
-                            "question_id": meta.get("question_id", ""),
+                            "question_id": qid,
                             "paper_name": f"RTU {meta.get('subject', 'B.Tech')} ({meta.get('year', '')})",
                             "year": meta.get("year", 2022),
-                            "subject": meta.get("subject", target_subject),
+                            "subject": meta.get("subject", target_subject or ""),
+                            "subject_id": meta.get("subject_id", ""),
                             "part": meta.get("section", "Part B"),
                             "marks": meta.get("marks", 10),
                             "source_pdf": meta.get("source_pdf", "RTU_Exam.pdf"),
                             "page_number": meta.get("page_number", 1),
                             "question_text": d.page_content,
-                            "rerank_score": meta.get("relevance_score", 0.0),
+                            "rerank_score": _rerank_score,
                         })
+                    raw_questions.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
+                    raw_citations.sort(key=lambda x: x.get("rerank_score", 0.0), reverse=True)
                     context_string = format_docs(sources)
                     retrieval_res = {"results": raw_questions, "citations": raw_citations, "context_string": context_string}
                 else:
-                    # Fallback to pipeline retrieval if LC retriever returns empty
+                    # Use filtered hybrid RetrievalPipeline when filters/subject active or LC empty
                     retrieval_res = self.pipeline.retrieve(
                         query=rewritten_query,
                         subject=target_subject,
@@ -883,9 +1101,7 @@ class ChatService:
                             c.get("subject", "").upper() == target_sub_clean or
                             c.get("subject_id", "").upper() == f"SUBJ_{target_sub_clean}")
                     ]
-                    if not citations_data and raw_citations:
-                        citations_data = raw_citations[:top_k]
-                        retrieved_questions = raw_questions[:top_k]
+                    # BUG-4 FIX: Never fall back to unfiltered raw_citations across subjects.
                 else:
                     retrieved_questions = raw_questions[:top_k]
                     citations_data = raw_citations[:top_k]
@@ -916,19 +1132,19 @@ class ChatService:
                 )
                 context_string = context_string + freq_note if context_string else freq_note
 
-            # Check if this subject simply has no papers in DB vs genuine out-of-syllabus query
-            is_unindexed_subject = (subj_paper_count == 0)
-            threshold = getattr(settings, "OUT_OF_SCOPE_THRESHOLD", -6.0)
+            # Check if this subject simply has no indexed questions vs genuine out-of-syllabus query
+            threshold = getattr(settings, "OUT_OF_SCOPE_THRESHOLD", -9.5)
+            cit_threshold = getattr(settings, "CITATION_RELEVANCE_THRESHOLD", -6.0)
             top_score = retrieved_questions[0].get("rerank_score", 0.0) if retrieved_questions else -999.0
 
             if not is_unindexed_subject and top_score < threshold:
                 citations_data = []
                 retrieved_questions = []
-                if detected_subject:
+                if target_subject:
                     if language_pref == "hinglish" or any(w in user_message.lower() for w in ["kya", "hai", "kaise", "samjhao"]):
                         assistant_reply = (
                             f"Arre junior, '{user_message}' {target_subject} ke RTU syllabus ya past papers mein directly nahi mil raha. "
-                            f"Aap {target_subject} ka koi specific concept (jaise Normalization, SQL, Transactions, ER Modeling) pooch sakte hain, ya Part A/B/C ke important questions maang sakte hain!"
+                            f"Aap {target_subject} ka koi specific concept pooch sakte hain, ya Part A/B/C ke important questions maang sakte hain!"
                         )
                     else:
                         assistant_reply = (
@@ -941,6 +1157,9 @@ class ChatService:
                     else:
                         assistant_reply = "I searched the RTU syllabus and past question papers, but could not find a close match for this topic. Please specify the subject (e.g., DSA, DBMS, DCCN, TOC, DE, AEM) or standard RTU question phrasing!"
             else:
+                # Omit low-confidence citations while still answering partially-covered syllabus topics
+                if not is_unindexed_subject and top_score < cit_threshold:
+                    citations_data = []
                 # LLM Synthesis with Senior Tutor System Prompt
                 llm = get_llm_provider(provider_type=provider_name) if provider_name else (self.default_llm_provider or get_llm_provider())
                 
@@ -955,9 +1174,16 @@ class ChatService:
                 if session_obj:
                     system_prompt += (
                         f"\nStudent Context: Year {session_obj.year or 2}, {session_obj.branch or 'CSE'}. "
-                        f"Target Subject: {target_subject}. Hours available before exam: {session_obj.hours_left or 6.0}h. "
+                        f"Target Subject: {target_subject or 'General RTU Curriculum'}. Hours available before exam: {session_obj.hours_left or 6.0}h. "
                         f"Study Mode: {session_obj.mode or 'explain_topic'}."
                     )
+                try:
+                    eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
+                    student_mem_ctx = MemoryService.get_student_memory_context(db, user_id=eff_user_id, target_subject=target_subject)
+                    if student_mem_ctx.get("prompt_block"):
+                        system_prompt += f"\n\n{student_mem_ctx['prompt_block']}"
+                except Exception as mem_err:
+                    logger.debug(f"Memory prompt injection skipped: {mem_err}")
                 if language_pref == "hinglish":
                     system_prompt += "\nPreferred Language: Reply in friendly, casual Hinglish (Hindi written in Roman script)."
                 elif language_pref == "english":
@@ -967,11 +1193,11 @@ class ChatService:
                     "\nOfficial RTU Marking Rubric Guidelines:\n"
                     "Structure your technical explanation with the following clear sections to target full marks:\n"
                     "1. **Technical Definition**: Formal definition and theoretical foundation.\n"
-                    "2. **Architecture / Diagram**: A clean ASCII block diagram or structural schematic illustrating components.\n"
-                    "3. **Algorithmic Mechanics / Step-by-Step Procedure**: Clearly numbered steps, derivations, or pseudocode.\n"
+                    "2. **Block Diagram / Structure**: A clean ASCII block diagram or structural flow illustrating components.\n"
+                    "3. **Working Logic / Algorithm / Derivation**: Clearly numbered steps, derivations, or pseudocode.\n"
                     "4. **Concrete Working Example**: Input values traced through the steps to final output.\n"
                     "5. **Complexity Analysis**: Big-O notation for time (worst, average, best) and space complexity.\n"
-                    "6. **RTU Examiner Scoring Tip**: Direct advice on where students lose marks and how examiners score full 8 or 15 marks."
+                    "6. **RTU Examiner Scoring Strategy**: Direct advice on where students lose marks and how examiners score full 8 or 15 marks."
                 )
 
                 target_provider = (provider_name or getattr(settings, "DEFAULT_LLM_PROVIDER", "ollama") or "ollama").strip().lower()
@@ -1089,7 +1315,22 @@ class ChatService:
                 "marks": cit.get("marks")
             })
 
+        if session_obj:
+            session_obj.updated_at = datetime.utcnow()
         db.commit()
+
+        try:
+            eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
+            MemoryService.record_turn_interaction(
+                db=db,
+                user_id=eff_user_id,
+                query=user_message,
+                answer=assistant_reply,
+                subject=target_subject,
+                intent=intent.value if intent else "academic"
+            )
+        except Exception as mem_err:
+            logger.debug(f"Student long-term memory recording skipped: {mem_err}")
 
         first_line = user_message.strip().split("\n")[0]
         derived_title = first_line[:40] + ("..." if len(first_line) > 40 else "")

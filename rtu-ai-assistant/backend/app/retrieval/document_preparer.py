@@ -4,9 +4,40 @@ Extracts canonical question records from SQLite (Section 5 Schema) and prepares
 individual searchable retrieval units with structured metadata headers.
 """
 
+import re
 from typing import List, Dict, Any
 from sqlalchemy.orm import Session
 from ..database.models import Question, Paper, Subject, Topic, Unit
+
+_OCR_NOISE_RE = re.compile(
+    r'\[\s*contd[^\]]*|contd\.{2,}|\bpage\s*\d+\s*(?:of\s*\d*)?\b|'
+    r'\bvp/\d+\b|\bpaper\s*code\b|\[?\d[a-z]{1,3}\d{3,4}\]?|\[\s*\d{3,5}\s*\]',
+    re.I
+)
+_BOILER_FRAGMENT_RE = re.compile(
+    r'^[\)\(\.\:\-\s]*(?:attempt\s+any\s+\w+\s+questions|write\s*short\s*notes?\s*on|'
+    r'answer\s+the\s+following|unit[\s\-]*(?:[ivx\d]+)?|details\.)[\.\:\-\s\d\(\)or]*$',
+    re.I
+)
+
+
+def is_meaningful_question(text: str) -> bool:
+    """Filters out OCR garbage fragments and empty headers while keeping short valid Part A questions."""
+    if not text or not text.strip():
+        return False
+    cleaned = _OCR_NOISE_RE.sub(' ', text).strip()
+    if _BOILER_FRAGMENT_RE.match(cleaned):
+        return False
+    without_markers = re.sub(
+        r'\([a-z0-9\.]+\)|\[[a-z0-9\.]+\]|\b[a-z]\)|\bor\b|\bunit[\s\-]*[ivx\d]+\b',
+        ' ',
+        cleaned,
+        flags=re.I
+    ).strip()
+    alpha_words = re.findall(r'[a-zA-Z]{2,}', without_markers)
+    total_alpha = sum(len(w) for w in alpha_words)
+    return (len(alpha_words) >= 2 and total_alpha >= 8) or (len(alpha_words) == 1 and total_alpha >= 16)
+
 
 def prepare_retrieval_documents(db: Session) -> List[Dict[str, Any]]:
     """
@@ -14,7 +45,11 @@ def prepare_retrieval_documents(db: Session) -> List[Dict[str, Any]]:
     rich, searchable document string according to the RTU AI blueprint.
     Compatible with Plan v2 relational models.
     """
-    questions = db.query(Question).filter(Question.status == "approved").all()
+    # BUG-10 FIX: Filter out OCR garbage fragments/headers while preserving valid short questions.
+    questions = [
+        q for q in db.query(Question).filter(Question.status == "approved", Question.text.isnot(None)).all()
+        if is_meaningful_question(q.text)
+    ]
     documents = []
 
     for q in questions:

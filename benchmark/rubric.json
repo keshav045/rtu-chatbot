@@ -1,0 +1,191 @@
+{
+  "Q01": {
+    "question": "What is B-tree insertion? Explain the steps.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["leaf", "leaves", "leaf node"],
+      ["split", "splitting", "overflow"],
+      ["middle key", "median", "promot", "move up", "moves up", "push up", "parent"],
+      ["m-1", "m - 1", "order m", "order of m", "maximum keys"]
+    ],
+    "must_not_contain": [
+      "binary search tree",
+      "binary tree properties",
+      "balance factor",
+      "height difference"
+    ],
+    "min_groups_met": 4
+  },
+  "Q02": {
+    "question": "Explain the Pumping Lemma for regular languages.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["pumping length", "length p", "|s| >= p", "|s| ≥ p", "constant p", "integer p"],
+      ["xyz", "s = xyz", "x y z"],
+      ["|y| >= 1", "|y| ≥ 1", "|y| > 0", "y is non-empty", "length of y is at least 1"],
+      ["|xy| <= p", "|xy| ≤ p"],
+      ["xy^i", "xy^{i}", "xy^k", "xy^i z", "xy^iz"]
+    ],
+    "must_not_contain": [
+      "context-free",
+      "context free",
+      "uvwxy"
+    ],
+    "min_groups_met": 5
+  },
+  "Q03": {
+    "question": "Explain normalization up to 3NF in DBMS.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["1nf", "first normal form", "atomic values", "atomic"],
+      ["2nf", "second normal form", "partial dependency", "partial dependencies"],
+      ["3nf", "third normal form", "transitive dependency", "transitive dependencies"],
+      ["superkey", "super key", "prime attribute", "candidate key"]
+    ],
+    "must_not_contain": [
+      "acid properties",
+      "atomicity, consistency, isolation",
+      "closure computation f+"
+    ],
+    "min_groups_met": 4
+  },
+  "Q04": {
+    "question": "Explain the TCP three-way handshake.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["syn", "syn packet", "syn segment"],
+      ["syn-ack", "syn+ack", "syn ack", "syn/ack"],
+      ["ack", "ack packet", "ack segment"],
+      ["sequence number", "sequence numbers", "seq number", "isn"]
+    ],
+    "must_not_contain": [
+      "dbms",
+      "database"
+    ],
+    "min_groups_met": 4
+  },
+  "Q05": {
+    "question": "Explain the difference between DFS and BFS.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["stack", "recursion", "recursive"],
+      ["queue", "level by level", "level-by-level", "level order"],
+      ["o(v+e)", "o(v + e)", "o(|v| + |e|)", "o(v+ e)"],
+      ["o(v)", "o(|v|)"]
+    ],
+    "must_not_contain": [
+      "2^v",
+      "o(2^v)",
+      "2^n",
+      "exponential space"
+    ],
+    "min_groups_met": 4
+  },
+  "Q06": {
+    "question": "Give a 2 mark answer: what is a deadlock?",
+    "type": "answer",
+    "must_contain_groups": [
+      ["process", "processes"],
+      ["resource", "resources"],
+      ["waiting", "wait", "blocked", "cannot proceed", "held by another", "indefinitely", "circular wait"]
+    ],
+    "must_not_contain": [
+      "bakery",
+      "journal of the acm",
+      "1978",
+      "lueker",
+      "szymanski"
+    ],
+    "min_groups_met": 3
+  },
+  "Q07": {
+    "question": "Make a 4 hour crash revision plan for the DBMS exam.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["hour 1", "1 hour", "4 hour", "4 hours", "hour-by-hour"],
+      ["er model", "er diagram", "entity-relationship", "entity relationship", "er modeling"],
+      ["normalization", "normal form", "normal forms", "1nf", "2nf", "3nf", "bcnf"],
+      ["sql", "ddl", "dml", "queries", "join"],
+      ["transaction", "transactions", "concurrency", "acid"]
+    ],
+    "must_not_contain": [],
+    "min_groups_met": 5
+  },
+  "Q08": {
+    "question": "Quiz me with 3 questions on data structures.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["?"]
+    ],
+    "must_not_contain": [
+      "how would you like to proceed",
+      "which topic or question would you like to start with",
+      "which topic or question would you like to prepare",
+      "tell me your time left"
+    ],
+    "min_groups_met": 1
+  },
+  "Q09": {
+    "question": "Explain the four conditions for deadlock in Operating Systems.",
+    "type": "answer",
+    "must_contain_groups": [
+      ["mutual exclusion"],
+      ["hold and wait", "hold-and-wait"],
+      ["no preemption", "non-preemption", "no pre-emption", "without preemption"],
+      ["circular wait", "circular chain", "circular waiting"]
+    ],
+    "must_not_contain": [
+      "bakery",
+      "iso/iec",
+      "25010",
+      "gafni"
+    ],
+    "min_groups_met": 4
+  },
+  "Q10": {
+    "question": "What is the cricket score today?",
+    "type": "refuse",
+    "must_contain_groups": [],
+    "must_not_contain": [
+      "**os**",
+      "from os",
+      "from **os**",
+      "question from os",
+      "wickets",
+      "score is",
+      "ipl"
+    ],
+    "min_groups_met": 0
+  },
+  "Q11": {
+    "question": "Recommend a good Bollywood movie.",
+    "type": "refuse",
+    "must_contain_groups": [],
+    "must_not_contain": [
+      "**os**",
+      "from os",
+      "from **os**",
+      "question from os",
+      "movie",
+      "cinema",
+      "actor"
+    ],
+    "min_groups_met": 0
+  },
+  "Q12": {
+    "question": "Give me a biryani recipe.",
+    "type": "refuse",
+    "must_contain_groups": [],
+    "must_not_contain": [
+      "**os**",
+      "from os",
+      "from **os**",
+      "question from os",
+      "recipe",
+      "rice",
+      "chicken",
+      "ingredients"
+    ],
+    "min_groups_met": 0
+  }
+}

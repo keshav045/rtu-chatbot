@@ -153,8 +153,10 @@ class RetrievalPipeline:
         # ------------------------------------------------------------------
         # TASK 1: LRU Cache lookup
         # ------------------------------------------------------------------
+        # BUG-7 FIX: Cache key was missing section, year_from, year_to — queries with
+        # different section/year filters incorrectly returned the first cached result.
         query_normalized = _normalize_query(query)
-        cache_key = (query_normalized, subject, semester, marks, top_k)
+        cache_key = (query_normalized, subject, semester, year_from, year_to, section, marks, top_k)
 
         cached = self._cache.get(cache_key)
         if cached is not None:
@@ -170,7 +172,9 @@ class RetrievalPipeline:
         # ------------------------------------------------------------------
         # 1. Dense Semantic Search
         # ------------------------------------------------------------------
-        dense_results = self.dense_indexer.search(query, top_k=dense_k)
+        # BUG-8 FIX: subject and id_mapping_meta were not passed to dense_indexer.search(),
+        # so the subject-boost feature (TASK 4 in dense_indexer.py) never activated.
+        dense_results = self.dense_indexer.search(query, top_k=dense_k, subject=subject, id_mapping_meta=self.doc_store)
 
         # 2. Sparse Keyword Search
         sparse_results = self.bm25_indexer.search(query, top_k=sparse_k)

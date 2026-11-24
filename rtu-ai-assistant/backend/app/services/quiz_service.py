@@ -11,7 +11,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database.models import Topic, Question, QuizAttempt, Subject, Paper
+from app.database.models import Topic, Question, QuizAttempt, Subject, Paper, SessionModel
 from app.llm.llm_factory import get_llm_provider
 
 class QuizService:
@@ -235,8 +235,8 @@ class QuizService:
         else:
             feedback_text += "Great job including structured steps, example, and diagram reference!"
 
-        # Persist in quiz_attempts if session_id exists
-        if session_id:
+        # Persist in quiz_attempts if session_id corresponds to a valid Session row
+        if session_id and db.query(SessionModel).filter(SessionModel.id == session_id).first():
             try:
                 attempt = QuizAttempt(
                     id=f"quiz_{uuid.uuid4().hex[:12]}",

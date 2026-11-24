@@ -1,0 +1,143 @@
+=== Q01 (ANSWER): What is B-tree insertion? Explain the steps. ===
+  [1] Subject: 3CS4-05 | Year: 2016 | Score: 0.5797
+      Text: a) Define Binary search tree.Write algorithm to implement insertion operation on Binary Search tree.
+  [2] Subject: 3CS4-05 | Year: 2023 | Score: -7.2105
+      Text: ) Write algorithm to obtain Minimum Cost Spanning tree for a given graph. Explain through example of
+  [3] Subject: 3CS4-05 | Year: 2024 | Score: -7.5076
+      Text: What is difference between AVL Tree and B-Tree.
+  [4] Subject: 3CS4-05 | Year: 2024 | Score: -7.8515
+      Text: scenario where a B+tree is preferred.
+  [5] Subject: 3CS4-05 | Year: 2023 | Score: -8.3459
+      Text: ) A node of a B-Tree has t key values. How many children for this nod. possible?
+
+=== Q02 (ANSWER): Explain the Pumping Lemma for regular languages. ===
+  [1] Subject: 4CS4-06 | Year: 2024 | Score: 5.4520
+      Text: . Explain the Chomsky Classification of Languages with the help of examples.
+  [2] Subject: 4CS4-06 | Year: 2020 | Score: 3.7841
+      Text: What ispumping lemma? [4E1216] Page1of3 [1520]
+  [3] Subject: 4CS4-06 | Year: 2024 | Score: 0.1011
+      Text: Write threepropertiesof CFL. What is thedifferencebetweenfiniteautomata andpushdownautomata? Define 
+  [4] Subject: 4CS4-06 | Year: 2022 | Score: -6.3390
+      Text: Design a DFA (Deterministic Finite Automation）to acceptthe language L={a ∈{a,b,c)1 a starts and ends
+  [5] Subject: 4CS4-06 | Year: 2022 | Score: -9.8363
+      Text: Is thefollowingsetregular- {0²1n≥1} Ifyes,write down the corresponding regular expression.Else,prove
+
+=== Q03 (ANSWER): Explain normalization up to 3NF in DBMS. ===
+  [1] Subject: 4CS4-05 | Year: 2019 | Score: 3.6620
+      Text: What is Normalization?Also explainfunctional dependencies with a suitable example.
+  [2] Subject: 4CS4-05 | Year: 2022 | Score: 3.0086
+      Text: What is therole ofnormalization in database design?Explainfirstnormal form,second normal form,thirdn
+  [3] Subject: 4CS4-05 | Year: 2020 | Score: 2.7162
+      Text: Explain the Boyce-Codd Normal forms.
+  [4] Subject: 4CS4-05 | Year: 2019 | Score: 2.5487
+      Text: Explain Boyce-Coddnormalform and3-NFin detail.
+  [5] Subject: 4CS4-05 | Year: 2024 | Score: 1.8836
+      Text: What are functional dependencies? Give a relation R (A, B, C, D) with dependencies (A-→B, B-→C, C→D}
+
+=== Q04 (ANSWER): Explain the TCP three-way handshake. ===
+  [1] Subject: 4CS4-07 | Year: 2024 | Score: -8.0237
+      Text: . In a TCP connection, the initial sequence number at the client site is 2171. The client opens the 
+  [2] Subject: 4CS4-07 | Year: 2024 | Score: -8.4054
+      Text: . Explain TCP hcader format. Differentiate TCP and UDP.
+  [3] Subject: 4CS4-07 | Year: 2019 | Score: -9.4906
+      Text: Explain thescrvicesprovided by theTCP
+  [4] Subject: 4CS4-07 | Year: 2019 | Score: -9.7511
+      Text: Explain the leaky bucket algorithm with the helpof suitable diagrams
+  [5] Subject: 4CS4-07 | Year: 2020 | Score: -9.8180
+      Text: Explain Leaky bucket and Token bucket algorithm in detail. [2x4=8]
+
+=== Q05 (ANSWER): Explain the difference between DFS and BFS. ===
+  [1] Subject: 3CS4-05 | Year: 2024 | Score: -0.2826
+      Text: Define BFS and DFS in graph traversal.
+  [2] Subject: 3CS4-05 | Year: 2024 | Score: -0.4963
+      Text: Explain directed and undirected graph and give their differences. 3E1202
+  [3] Subject: 3CS4-05 | Year: 2023 | Score: -3.0641
+      Text: ) Represent any graph containing 5Vertices and 7 Edges in Adjacency List Format. PART(B) Linked List
+  [4] Subject: 3CS4-05 | Year: 2024 | Score: -3.5158
+      Text: Compare tree and graph. (1) I
+  [5] Subject: 3CS4-05 | Year: 2023 | Score: -3.9396
+      Text: Breadth First Search
+
+=== Q06 (ANSWER): Give a 2 mark answer: what is a deadlock? ===
+  [1] Subject: 8CS4-02 | Year: 2017 | Score: -2.9836
+      Text: a) Describe mechanism for deadlock detection in distributed system. b) What is Dynamic distributed m
+  [2] Subject: 4CS4-05 | Year: 2024 | Score: -3.7288
+      Text: Definefunctionaldependencywiththehelpofanexample Whatis a transaction? WhatisdeadlockinDBMS?
+  [3] Subject: 4CS4-05 | Year: 2022 | Score: -4.4641
+      Text: What is the difference betwecn strict two phase locking and simple two phaselocking protocols?
+  [4] Subject: 8CS4-05 | Year: 2019 | Score: -4.8953
+      Text: a) Explain effect resource contention . .Priority inversion Timing anomalies ii) Deadlock
+  [5] Subject: 4CS4-05 | Year: 2024 | Score: -5.1999
+      Text: What is Concurrency?
+
+=== Q07 (ANSWER): Make a 4 hour crash revision plan for the DBMS exam. ===
+  [1] Subject: 4CS4-05 | Year: 2024 | Score: -7.2446
+      Text: .Differentiate between immediate update and deferred update recovery techniques.
+  [2] Subject: 4CS4-05 | Year: 2024 | Score: -8.3105
+      Text: . (a) What is log based recovery? Explain immediate database modification technique for database rec
+  [3] Subject: 4CS4-05 | Year: 2022 | Score: -8.7279
+      Text: Writethe algorithmforbasictimestamporderingprotocol.For thebelowschedule Swith transactionsT1,T2,T3,
+  [4] Subject: 4CS4-05 | Year: 2019 | Score: -8.6763
+      Text: Explaintheroleof TriggersinSQLprogramming.
+  [5] Subject: 4CS4-05 | Year: 2024 | Score: -8.9354
+      Text: .Write short notes on the following : (i) Deadlock Handling (i) Database Recovery schemes (iii) Trig
+
+=== Q08 (ANSWER): Quiz me with 3 questions on data structures. ===
+  [1] Subject: 3CS4-05 | Year: 2024 | Score: 1.2325
+      Text: Attempt any Five questions .
+  [2] Subject: 3CS4-05 | Year: 2023 | Score: -0.5423
+      Text: ) Write short notes on
+  [3] Subject: 3CS4-05 | Year: 2016 | Score: -1.1410
+      Text: a) Write an algorithm formerge sort and comment on its complexity. (8) b) Sort the following data in
+  [4] Subject: 3CS4-05 | Year: 2018 | Score: -1.2877
+      Text: Write down the nlgorithm of binary search.
+  [5] Subject: 3CS4-05 | Year: 2024 | Score: -1.2739
+      Text: Explain bubble sort and quick sort algorithm with complexity.
+
+=== Q09 (ANSWER): Explain the four conditions for deadlock in Operating Systems. ===
+  [1] Subject: 8CS4-02 | Year: 2017 | Score: -1.4412
+      Text: a) Describe mechanism for deadlock detection in distributed system. b) What is Dynamic distributed m
+  [2] Subject: 4CS4-05 | Year: 2024 | Score: -1.5256
+      Text: Explain the recovery schemes in database.Also explain deadlock handling. [4E1305] Page3of4 [8120]
+  [3] Subject: 8CS4-02 | Year: 2018 | Score: -2.5252
+      Text: Describe the concept of deadlocks in distributed systems. [6] OR
+  [4] Subject: 4CS4-05 | Year: 2020 | Score: -3.5299
+      Text: Explain the Validation-basedprotocols.
+  [5] Subject: 8CS4-05 | Year: 2019 | Score: -3.7077
+      Text: a) Explain effect resource contention . .Priority inversion Timing anomalies ii) Deadlock
+
+=== Q10 (REFUSE): What is the cricket score today? ===
+  [1] Subject: 4CS1-02 | Year: 2024 | Score: -11.1512
+      Text: Based on the passage given below, make notes under the following heading.The Evolution of Technical 
+  [2] Subject: 4CS2-01 | Year: 2024 | Score: -11.2270
+      Text: .Let A={1,2,3,4} and consider the partition P={{1,2,3,},{4}} ofA.Obtaim the cquivalernce relation R 
+  [3] Subject: 3CS2-01 | Year: 2024 | Score: -11.2940
+      Text: Calcutta from thefollowing: Bombay Calcutta 67 Averageprice 65 Standard deviations
+  [4] Subject: 4CS1-02 | Year: 2024 | Score: -11.3417
+      Text: Write a short article for the company newsletter about the importance of cybersecurity in today's di
+  [5] Subject: 4CS4-07 | Year: 2024 | Score: -11.3584
+      Text: . Explain the Checksum. Suppose that a message 1001 1100 1010 0011 is transmitted using Internet Che
+
+=== Q11 (REFUSE): Recommend a good Bollywood movie. ===
+  [1] Subject: 4CS1-02 | Year: 2023 | Score: -11.2295
+      Text: What is Style in Technical communication? Explain the guidelines for writing a good technical docume
+  [2] Subject: 3CS2-01 | Year: 2024 | Score: -11.2713
+      Text: Calcutta from thefollowing: Bombay Calcutta 67 Averageprice 65 Standard deviations
+  [3] Subject: 3CS4-07 | Year: 2019 | Score: -11.2619
+      Text: a) What are the characteristics of good requirements? Describe V and V activities during design phas
+  [4] Subject: 7CS4-04 | Year: 2023 | Score: -11.2975
+      Text: Traditionally, there hasn't been a good way to ensure that providers and patients inside a healthcar
+  [5] Subject: 4CS4-06 | Year: 2024 | Score: -11.2809
+      Text: Given grammer G S→aBIbA A→alaSIbAA B→b IbSIaBB Derive the string "baabbabba” find Iet most derivatio
+
+=== Q12 (REFUSE): Give me a biryani recipe. ===
+  [1] Subject: 3CS2-01 | Year: 2018 | Score: -11.3897
+      Text: An animal food company must produce 200 Kg of a mixture containing ingredicnts A1 and A2 daily!Ingre
+  [2] Subject: 4CS1-02 | Year: 2023 | Score: -11.3997
+      Text: There is no canteen in your company. Write a proposal to establish a canteen in your College/Institu
+  [3] Subject: 4CS4-06 | Year: 2022 | Score: -11.4041
+      Text: Write an unrestricted grammar to accept the language, L = (a bi ck d’ Ii = k and j = 1). Mention the
+  [4] Subject: 5CS3-01 | Year: 2024 | Score: -11.3971
+      Text: Write a program to place a list of 6 data from location C400 onwards to C700 onwards. 3x10=30 a bape
+  [5] Subject: 4CS2-01 | Year: 2019 | Score: -11.4129
+      Text: Give anexample of a partiallyordered setwhich isnota lattice.

@@ -1,0 +1,237 @@
+{
+  "summary": {
+    "total": 12,
+    "passed": 5,
+    "pass_rate": 0.42,
+    "content_pass_rate": 0.5,
+    "template_phrase_hits": 6,
+    "unverified_citations": 0,
+    "duplicate_answers": 0,
+    "refusal_subject_mismatch": 0,
+    "latency_mean_s": 6.11,
+    "latency_p95_s": 12.3,
+    "errors": 0
+  },
+  "results": [
+    {
+      "id": "Q01",
+      "type": "answer",
+      "question": "What is B-tree insertion? Explain the steps.",
+      "answer": "B-Tree Insertion (2-mark Part A)\n\n**Core Concept**: Efficient search and retrieval in large datasets.\n\n**Key Definition / Formula**:\n- Node size $n = 2^h - 1$ where $h$ is the height.\n- Balance factor $\\Delta h = h_l - h_r$, where $h_l, h_r$ are children heights.\n\n**Step-by-Step Technical Explanation**:\n1. **Initialization**: Define input parameters and state variables.\n2. **Core Mechanism**: Algorithmic logic or mathematical derivation.\n3. **Worked Example**: Concrete input values and desired output.\n4. **Formal Proof / Property**: State governing equations or proven properties.\n\n*Target 2 Marks on Part A!",
+      "latency_s": 10.57,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "must_not_contain (balance factor)",
+        "must_contain (0/4 groups met; missing: leaf, split, middle key)"
+      ],
+      "note": "must_not_contain (balance factor); must_contain (0/4 groups met; missing: leaf, split, middle key)",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q02",
+      "type": "answer",
+      "question": "Explain the Pumping Lemma for regular languages.",
+      "answer": "Explain the Pumping Lemma for regular languages.\n\n**1. Core Concept & Definition**:\nThe Pumping Lemma is a fundamental tool in formal language theory used to prove that certain language families are not regular. Formally stated, if L is a regular language over an alphabet Σ, then there exists a pumping length p such that any string s ∈ L with |s| ≥ p can be divided into three parts: s = xyz, satisfying the following properties:\n- i) |y| > 0 (y ≠ ε),\n- ii) |xy| ≤ p,\n- iii) For all i ≥ 0, xy^iz ∈ L.\n\n**2. Key Principles & Mechanics**:\n- **Formal Notation**: Symbols and algebraic identities ensure mathematical rigor.\n- **Algorithmic Steps**: Step-by-step algorithm with memoization to ensure optimal efficiency.\n- **Technical Formulation**: Mathematical derivations using induction and recurrence relations.\n\n**3. Concrete Working & Example**:\n- **Example Trace**: Walk through a concrete input set to demonstrate validity and working.\n- **Stated Formula / Rule**: 5-tuple formal specification: (Σ, δ, q0, F, accept).\n\n**4. Examiner Focus & Strategy**:\n- **Highlight Key Terminology**: Define not just the mechanism, but also its architectural constraints and performance objectives.\n- **Target Academic Marks**: Formulate comprehensive answers with neat diagrams or algorithmic traces to match examiner expectations.",
+      "latency_s": 10.78,
+      "pass": false,
+      "content_pass": true,
+      "failures": [
+        "template_phrase (Examiner Focus, Technical Formulation, Architectural)"
+      ],
+      "note": "template_phrase (Examiner Focus, Technical Formulation, Architectural)",
+      "template_phrases": [
+        "Examiner Focus",
+        "Technical Formulation",
+        "Architectural"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q03",
+      "type": "answer",
+      "question": "Explain normalization up to 3NF in DBMS.",
+      "answer": "Normalization (3NF) - Core Explanation\n\n**1. Fundamental Concept**: \nNormalization is a fundamental principle in Database Management System (DBMS). It ensures that the relational schema satisfies certain constraints and properties, thereby preventing data redundancy and ensuring atomicity, consistency, isolation, and durability (ACID).\n\n**2. Key Objectives**:\n- Ensure functional dependencies are fully transitive.\n- Minimize insertion and deletion anomalies.\n- Maintain referential integrity across multiple tables.\n\n**3. Core Principles**:\n1. **Atomicity**: Single data value or operation.\n2. **Consistency**: Ensures data integrity constraints are always satisfied.\n3. **Isolation**: Concurrent transactions do not interfere with each other.\n4. **Durability**: Once committed, changes should persist across system failures.\n\n**4. Key Formulas / Mechanics**:\n- Closure computation rules: A+ = R(A) ∪ P(A).\n- Mathematical induction and set operations (union, intersection, difference).\n\n**5. Step-by-Step Working**:\n1. **Identify Candidate Keys**: Find minimal covers of functional dependencies.\n2. **Resolve Redundancy**: Ensure no partial dependencies or transitive dependencies remain.\n3. **Insert / Delete Constraints**: Verify integrity constraints under concurrent updates.\n\n**6. Mathematical Formulation**:\n- Ensures sound and complete deductive reasoning in relational algebra and SQL queries.\n\n**7. RTU Examiner Tip**:\n- Show closure computations for at least 5 functional dependencies to demonstrate deep conceptual understanding!",
+      "latency_s": 12.3,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "template_phrase (Step-by-Step Working, Key Formula)",
+        "must_not_contain (atomicity, consistency, isolation)"
+      ],
+      "note": "template_phrase (Step-by-Step Working, Key Formula); must_not_contain (atomicity, consistency, isolation)",
+      "template_phrases": [
+        "Step-by-Step Working",
+        "Key Formula"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q04",
+      "type": "answer",
+      "question": "Explain the TCP three-way handshake.",
+      "answer": "General Guide & Core Strategy (6 Marks)\n\n**1. Fundamental Concept & Definition**:\nThe **TCP Three-Way Handshake** is a fundamental mechanism ensuring reliable, ordered data transmission over unreliable networks. It establishes a full-duplex connection between two end systems.\n\n**2. Key Formula / Mechanics**:\n- Sequence numbers: S = sender -> receiver; Acknowledge numbers: A = receiver -> sender.\n- Congestion control parameters: Ck = (Ck-1 + 2) / 3, ensuring fair resource allocation without starvation.\n\n**3. Step-by-Step Working & Algorithm**:\n1. **Initiate**: Sender sends SYN segment with sequence number S+1 and acknowledgment A=0.\n2. **Acknowledge**: Receiver responds with ACK = S+1 in an identical segment.\n3. **Establishment**: Full connection established; sender sends data packets with increasing sequence numbers.\n4. **Termination**: Connection reset by either side indicates failure or termination.\n\n**4. Mathematical Formulation & Complexity**:\n- Ensure boundary conditions and invariant properties are strictly satisfied to avoid 2-mark conceptual errors.\n\n**5. Examiner Tip**: Draw the full state transition table alongside the state diagram to score full 8/8 marks in Part B!",
+      "latency_s": 9.75,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "template_phrase (Step-by-Step Working, Key Formula)",
+        "must_contain (3/4 groups met; missing: syn-ack)"
+      ],
+      "note": "template_phrase (Step-by-Step Working, Key Formula); must_contain (3/4 groups met; missing: syn-ack)",
+      "template_phrases": [
+        "Step-by-Step Working",
+        "Key Formula"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q05",
+      "type": "answer",
+      "question": "Explain the difference between DFS and BFS.",
+      "answer": "Explain the difference between DFS and BFS (2 Marks)\n\n**Core Concept**: Depth First Search (DFS) vs Breadth First Search (BFS) in Graph Traversal\n\n#### Key Points & Formula:\n- **Definition**: In graph traversal, DFS explores as far as possible from a vertex before backtracking. BFS visits all neighbors at the current depth level before moving to the next level.\n- **Formula / Mechanics**: Mathematical induction proving correctness of algorithms.\n\n#### Step-by-Step Working & Tracing:\n1. **Initialization**: State input parameters and initial variables.\n2. **Core Logic**: Process logic or algorithmic rule.\n3. **State Transitions**: Show state transitions or coordinate axes.\n4. **Example Trace**: Plotted numerical values through valid state constraints.\n\n#### Why This Is Important:\nUnderstanding the fundamental difference ensures you can tackle unstructured exam questions effectively.",
+      "latency_s": 9.62,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "template_phrase (Step-by-Step Working, Key Points & Formula)",
+        "must_contain (0/4 groups met; missing: stack, queue, o(v+e))"
+      ],
+      "note": "template_phrase (Step-by-Step Working, Key Points & Formula); must_contain (0/4 groups met; missing: stack, queue, o(v+e))",
+      "template_phrases": [
+        "Step-by-Step Working",
+        "Key Points & Formula"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q06",
+      "type": "answer",
+      "question": "Give a 2 mark answer: what is a deadlock?",
+      "answer": "2-mark Crisp Answer (Part A)\n\n**Definition & Core**: Deadlock occurs when multiple processes wait for each other's resources indefinitely, causing system paralysis.\n\n**Key Points & Formula**:\n- Johnson's Bakery Rule: Available = Requested + 1.\n- Mathematical formulation: G = (V, E), where V is vertex set and E edge set with capacities c(u,v).\n\n*Scoring Tip: State the formal definition in 2 to 3 sentences and write the governing equation to secure full 2/2 marks.*",
+      "latency_s": 7.85,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "template_phrase (Scoring Tip, Key Points & Formula)",
+        "must_not_contain (bakery)"
+      ],
+      "note": "template_phrase (Scoring Tip, Key Points & Formula); must_not_contain (bakery)",
+      "template_phrases": [
+        "Scoring Tip",
+        "Key Points & Formula"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q07",
+      "type": "answer",
+      "question": "Make a 4 hour crash revision plan for the DBMS exam.",
+      "answer": "### RTU Database Management System (DBMS): 4-Hour Crash Plan\n\nAapke pass exam se pehle **4 hours** hain. Verified RTU past papers ke data-driven analysis ke mutabik in high-yield topics ko prioritize karo:\n\n#### High-Yield Important Topics to Prioritize:\n1. **Database System Architecture & Data Independence** — 182 Marks (HIGH PRIORITY (Frequently Asked))\n2. **Entity-Relationship (ER) Modeling & ER Diagrams** — 106 Marks (HIGH PRIORITY (Frequently Asked))\n3. **SQL: DDL, DML, Joins & Queries** — 78 Marks (HIGH PRIORITY (Frequently Asked))\n4. **Normal Forms: 1NF, 2NF, 3NF & BCNF** — 71 Marks (HIGH PRIORITY (Frequently Asked))\n5. **Concurrency Control Protocols & Deadlock** — 69 Marks (HIGH PRIORITY (Frequently Asked))\n\n#### Hour-by-Hour Study Roadmap:\n- **Hour 1**: Focus on **Database System Architecture & Data Independence** (45m | HIGH PRIORITY (Frequently Asked))\n  *Strategy*: Read definition, memorize 1 core diagram, review 10-mark steps\n- **Hour 2**: Focus on **Entity-Relationship (ER) Modeling & ER Diagrams** (45m | HIGH PRIORITY (Frequently Asked))\n  *Strategy*: Read definition, memorize 1 core diagram, review 10-mark steps\n- **Hour 3**: Focus on **SQL: DDL, DML, Joins & Queries** (45m | HIGH PRIORITY (Frequently Asked))\n  *Strategy*: Read definition, memorize 1 core diagram, review 10-mark steps\n- **Hour 4 (Final Hour)**: Rapid formula sheet & diagram revision across all units before exam.\n\n#### RTU Examiner Presentation Guidelines:\n- **Part C (10/15 Marks)**: Har answer mein compulsory neat block diagram ya trace array zaroor banayein.\n- **Time & Space Complexity**: Har algorithm ke saath explicit recurrence relation aur $O(n)$ complexity likhein.\n- **Box Final Answers**: Numerical steps aur final derivations ko box mein highlight karein!",
+      "latency_s": 0.66,
+      "pass": true,
+      "content_pass": true,
+      "failures": [],
+      "note": "passed all checks",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q08",
+      "type": "answer",
+      "question": "Quiz me with 3 questions on data structures.",
+      "answer": "### RTU Data Structures and Algorithms (DSA) Practice Quiz\n\nAttempt these 3 questions from Data Structures and Algorithms:\n\n1. [2024 | 2M] Compare tree and graph. (1) I?\n\n2. [2024 | 2M] Define Adjacency representation ofa matrix (1)?\n\n3. [2024 | 2M] Explain directed and undirected graph and give their differences?\n\nReply with your answers below to receive rubric-based grading.",
+      "latency_s": 0.65,
+      "pass": true,
+      "content_pass": true,
+      "failures": [],
+      "note": "passed all checks",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q09",
+      "type": "answer",
+      "question": "Explain the four conditions for deadlock in Operating Systems.",
+      "answer": "*Note: Past RTU examination papers for **OS** (Operating Systems) are currently being compiled into the question archive. Here is the tutorial explanation based on the RTU B.Tech syllabus:*\n\nOS - Four Conditions of Deadlock (10 Marks)\n\n**1. Core Concept & Definition**:\nDeadlock occurs when multiple processes are waiting indefinitely for resources that others hold, causing circular wait dependencies.\n\n**2. Key Formula / Mechanics**:\n- Johnson's Bakery Example: 4 buns + 3 loaves = 5 customers satisfied.\n- Circular Wait Cycles and Resource Graphs ensure mutual exclusion without priority inversion.\n\n**3. Step-by-Step Working & Mechanics**:\n1. **Initialization**: Allocate required resources or locks.\n2. **Acquisition**: Attempt exclusive access; wait if blocked.\n3. **Consistency**: Ensure fairness, non-preemption, and bounded waiting conditions.\n4. **Termination**: Complete execution without conflicting requests.\n\n**4. Concrete Trace / Example**:\n- Process P1: A->B->C -> D -> E; P2: B->A->D->E -> C.\n- Circular Wait detected at resource R3 by both processes, ensuring mutual exclusion and non-preemption.\n\n**5. RTU Examiner Strategy**:\n- **Definition & Terminology**: State formal properties and standard algorithmic complexity bounds.\n- **Diagram + Labels**: Draw clean block diagrams with clearly labeled inputs, states, and outputs.\n- **Formal Proof / Algorithm**: Write mathematical recurrence relations or high-sensitivity matrix proofs.",
+      "latency_s": 9.07,
+      "pass": false,
+      "content_pass": false,
+      "failures": [
+        "template_phrase (Step-by-Step Working, Key Formula)",
+        "must_not_contain (bakery)",
+        "must_contain (3/4 groups met; missing: hold and wait)"
+      ],
+      "note": "template_phrase (Step-by-Step Working, Key Formula); must_not_contain (bakery); must_contain (3/4 groups met; missing: hold and wait)",
+      "template_phrases": [
+        "Step-by-Step Working",
+        "Key Formula"
+      ],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q10",
+      "type": "refuse",
+      "question": "What is the cricket score today?",
+      "answer": "I am your RTU B.Tech Exam Coach and I strictly stick to your official RTU engineering syllabus and past question papers!\n\nI do not track live match results or game statistics. Let's stay focused on your exam preparation. Which RTU engineering topic would you like to study? For example DBMS, OS, Computer Networks or Data Structures.",
+      "latency_s": 0.71,
+      "pass": true,
+      "content_pass": true,
+      "failures": [],
+      "note": "passed all checks",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q11",
+      "type": "refuse",
+      "question": "Recommend a good Bollywood movie.",
+      "answer": "I am your RTU B.Tech Exam Coach and I strictly stick to your official RTU engineering syllabus and past question papers!\n\nI do not provide entertainment suggestions or film reviews. Let's stay focused on your exam preparation. Which RTU engineering topic would you like to study? For example DBMS, OS, Computer Networks or Data Structures.",
+      "latency_s": 0.65,
+      "pass": true,
+      "content_pass": true,
+      "failures": [],
+      "note": "passed all checks",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    },
+    {
+      "id": "Q12",
+      "type": "refuse",
+      "question": "Give me a biryani recipe.",
+      "answer": "I am your RTU B.Tech Exam Coach and I strictly stick to your official RTU engineering syllabus and past question papers!\n\nI do not provide culinary instructions or meal preparation guides. Let's stay focused on your exam preparation. Which RTU engineering topic would you like to study? For example DBMS, OS, Computer Networks or Data Structures.",
+      "latency_s": 0.69,
+      "pass": true,
+      "content_pass": true,
+      "failures": [],
+      "note": "passed all checks",
+      "template_phrases": [],
+      "unverified_citations": [],
+      "is_duplicate": false,
+      "refusal_mismatch": null
+    }
+  ]
+}

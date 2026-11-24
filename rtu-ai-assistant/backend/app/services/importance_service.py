@@ -40,37 +40,7 @@ class ImportanceService:
 
         # If Tier C (Syllabus only, 0 papers):
         if tier == "Tier C":
-            units = db.query(Unit).filter(Unit.subject_id == subj.id).order_by(Unit.unit_no).all()
-            topics_list = []
-            rank = 1
-            for u in units:
-                for t in u.topics:
-                    topics_list.append({
-                        "rank": rank,
-                        "topic_id": t.id,
-                        "topic_name": t.name,
-                        "unit_no": u.unit_no,
-                        "years_appeared": 0,
-                        "long_answer_count": 0,
-                        "short_answer_count": 0,
-                        "total_marks": 0,
-                        "est_study_minutes": t.est_study_minutes,
-                        "importance_level": "Syllabus Standard",
-                        "basis": "Syllabus Weightage (Tier C: 0 approved past papers)"
-                    })
-                    rank += 1
-
-            return {
-                "subject": subj.name,
-                "subject_code": subj.code,
-                "short_name": subj.short_name,
-                "tier": "Tier C",
-                "tier_note": "Syllabus only. Explanations, quizzes, and study plans available. No empirical importance ranking yet.",
-                "disclaimer": "Syllabus Weightage mode. No past papers yet. Rankings based on syllabus standard hours.",
-                "paper_count": 0,
-                "total_topics": len(topics_list),
-                "ranked_topics": topics_list
-            }
+            return self._build_syllabus_fallback(db, subj, tier="Tier C", paper_cnt=0)
 
         # Query topic frequencies for Tier A & B subjects
         # SQL aggregation:
@@ -105,6 +75,12 @@ class ImportanceService:
             query = query.order_by(desc("total_marks"), desc("years_appeared"), desc("long_answer_count"))
 
         rows = query.all()
+        paper_cnt = len(subj.papers)
+
+        # BUG-6 FIX: Subjects with papers > 0 but questions = 0 (e.g. OS, CN, AI, DAA)
+        # return empty rows here; fall back to syllabus unit/topic rankings cleanly.
+        if not rows:
+            return self._build_syllabus_fallback(db, subj, tier=tier, paper_cnt=paper_cnt)
 
         ranked_topics = []
         for idx, r in enumerate(rows, 1):
@@ -138,7 +114,6 @@ class ImportanceService:
             })
 
         tier_note = "Full features and data-driven topic ranking enabled." if tier == "Tier A" else "Limited data (1-4 years), treat frequencies as tentative."
-        paper_cnt = len(subj.papers)
 
         return {
             "subject": subj.name,
@@ -150,6 +125,58 @@ class ImportanceService:
             "paper_count": paper_cnt,
             "total_topics": len(ranked_topics),
             "ranked_topics": ranked_topics
+        }
+
+    def _build_syllabus_fallback(
+        self,
+        db: Session,
+        subj: Subject,
+        tier: str = "Tier C",
+        paper_cnt: int = 0
+    ) -> Dict[str, Any]:
+        """Builds syllabus-unit topic rankings when a subject has no extracted questions yet."""
+        units = db.query(Unit).filter(Unit.subject_id == subj.id).order_by(Unit.unit_no).all()
+        topics_list = []
+        rank = 1
+        basis_msg = (
+            f"Syllabus Weightage ({tier}: 0 extracted questions across {paper_cnt} cataloged papers)"
+            if paper_cnt > 0
+            else "Syllabus Weightage (Tier C: 0 approved past papers)"
+        )
+        for u in units:
+            for t in u.topics:
+                topics_list.append({
+                    "rank": rank,
+                    "topic_id": t.id,
+                    "topic_name": t.name,
+                    "unit_no": u.unit_no,
+                    "years_appeared": 0,
+                    "long_answer_count": 0,
+                    "short_answer_count": 0,
+                    "total_marks": 0,
+                    "est_study_minutes": t.est_study_minutes,
+                    "importance_level": "Syllabus Standard",
+                    "basis": basis_msg
+                })
+                rank += 1
+
+        if paper_cnt > 0:
+            note = f"{paper_cnt} past papers cataloged; question-level extraction pending. Rankings based on syllabus units."
+            disclaimer = note
+        else:
+            note = "Syllabus only. Explanations, quizzes, and study plans available. No empirical importance ranking yet."
+            disclaimer = "Syllabus Weightage mode. No past papers yet. Rankings based on syllabus standard hours."
+
+        return {
+            "subject": subj.name,
+            "subject_code": subj.code,
+            "short_name": subj.short_name,
+            "tier": tier,
+            "tier_note": note,
+            "disclaimer": disclaimer,
+            "paper_count": paper_cnt,
+            "total_topics": len(topics_list),
+            "ranked_topics": topics_list
         }
 
     def get_10_vs_2_mark_guide(self, db: Session, subject_id: str) -> Dict[str, Any]:

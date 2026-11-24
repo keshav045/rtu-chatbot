@@ -1,978 +1,1052 @@
-"""
-RTU AI Senior Tutor & Exam Coach - Streamlit Production App
-A dedicated academic assistant and revision planner for Rajasthan Technical University (RTU) B.Tech students.
-Powered by 14 Years of RTU Past Question Papers (2012-2026), FAISS Vector Search, BM25 Indexing, and OpenAI/Groq.
-Fully compatible with Streamlit Community Cloud (Self-Contained Embedded Engine) and Local/Remote FastAPI backends.
-"""
-
+import html
+import json
 import os
-import sys
-import time
-from pathlib import Path
-from typing import Dict, Any, List, Optional, Tuple
-import pandas as pd
+import uuid
+from typing import Any, Dict, List, Optional, Tuple
+
 import requests
 import streamlit as st
+import streamlit.components.v1 as components
 
-# --- Page Configuration (Zero Emojis) ---
+
+# --- Page & Backend Configuration ---
 st.set_page_config(
-    page_title="RTU Senior Tutor & Exam Coach",
+    page_title="RTU Senior Tutor",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
-# --- Ensure Backend Module Resolution ---
-PROJECT_ROOT = Path(__file__).resolve().parent
-BACKEND_PATH = PROJECT_ROOT / "rtu-ai-assistant" / "backend"
-if BACKEND_PATH.exists() and str(BACKEND_PATH) not in sys.path:
-    sys.path.insert(0, str(BACKEND_PATH))
+DEFAULT_BACKEND_URL = os.getenv(
+    "BACKEND_URL",
+    "https://keshavagarwal779-rtu-exam-assistant.hf.space",
+).rstrip("/")
 
-# --- Default Backend Configuration (Live Hugging Face Cloud API) ---
-DEFAULT_BACKEND_URL = os.getenv("BACKEND_URL", "https://keshavagarwal779-rtu-exam-assistant.hf.space")
-DEFAULT_BACKEND_MODE = os.getenv("BACKEND_MODE", "Hugging Face Space Backend (Cloud API)")
-
-# --- Canonical RTU Curriculum Mapping (Year -> Semester -> Subjects) ---
-RTU_CURRICULUM = {
-    1: {
-        1: [
-            ("BEE", "Basic Electrical Engineering"),
-            ("CS-ENG", "Communication Skills"),
-            ("EM-1", "Engineering Mathematics-I"),
-            ("PHY", "Engineering Physics")
-        ],
-        2: [
-            ("BCE", "Basic Civil Engineering"),
-            ("BME", "Basic Mechanical Engineering"),
-            ("CHEM", "Engineering Chemistry"),
-            ("EM-2", "Engineering Mathematics-II"),
-            ("HV", "Human Values")
-        ]
-    },
-    2: {
-        3: [
-            ("DSA", "Data Structures and Algorithms"),
-            ("OOP", "Object Oriented Programming (C++)"),
-            ("DE", "Digital Electronics"),
-            ("AEM", "Advanced Engineering Mathematics"),
-            ("SE", "Software Engineering"),
-            ("MEFA", "Managerial Economics and Financial Accounting")
-        ],
-        4: [
-            ("DBMS", "Database Management System"),
-            ("TOC", "Theory of Computation"),
-            ("DCCN", "Computer Networks"),
-            ("DMS", "Discrete Mathematics Structure"),
-            ("TC", "Technical Communication"),
-            ("POC", "Principle of Communication")
-        ]
-    },
-    3: {
-        5: [
-            ("OS", "Operating Systems"),
-            ("CN", "Computer Networks"),
-            ("AOA", "Analysis of Algorithms"),
-            ("MI", "Microprocessor & Interfaces")
-        ],
-        6: [
-            ("AI", "Artificial Intelligence"),
-            ("CD", "Compiler Design"),
-            ("CC", "Cloud Computing"),
-            ("CG", "Computer Graphics"),
-            ("DSR", "Data Science with R")
-        ]
-    },
-    4: {
-        7: [
-            ("ML", "Machine Learning"),
-            ("IOT", "Internet of Things"),
-            ("ISS", "Information System Security"),
-            ("BDA", "Big Data Analytics")
-        ],
-        8: [
-            ("DL", "Deep Learning"),
-            ("BC", "Blockchain Architecture"),
-            ("DIP", "Digital Image Processing"),
-            ("DS", "Distributed Systems")
-        ]
-    }
+STREAMS: List[str] = ["CSE", "IT", "ECE", "EE", "ME", "CE"]
+YEARS: List[int] = [1, 2, 3, 4]
+YEAR_LABELS: Dict[int, str] = {
+    1: "1st Year",
+    2: "2nd Year",
+    3: "3rd Year",
+    4: "4th Year",
 }
 
-# --- Dynamic Subject Quick Starters ---
-SUBJECT_QUICK_STARTERS: Dict[str, List[Tuple[str, str]]] = {
-    "DSA": [
-        ("AVL Tree Rotations", "Explain AVL tree rotations with diagrams and RTU exam scoring tips."),
-        ("Dijkstra Algorithm", "Explain Dijkstra algorithm with trace steps for a 10-mark question.")
+_YEAR1_COMMON_SUBJECTS: List[Tuple[str, str]] = [
+    ("BEE", "Basic Electrical Engineering"),
+    ("CS-ENG", "Communication Skills"),
+    ("EM-1", "Engineering Mathematics-I"),
+    ("PHY", "Engineering Physics"),
+    ("BCE", "Basic Civil Engineering"),
+    ("BME", "Basic Mechanical Engineering"),
+    ("CHEM", "Engineering Chemistry"),
+    ("EM-2", "Engineering Mathematics-II"),
+    ("HV", "Human Values & Professional Ethics"),
+]
+
+_CSE_IT_YEAR_SUBJECTS: Dict[int, List[Tuple[str, str]]] = {
+    1: _YEAR1_COMMON_SUBJECTS,
+    2: [
+        ("AEM", "Advanced Engineering Mathematics"),
+        ("DE", "Digital Electronics"),
+        ("DSA", "Data Structures and Algorithms"),
+        ("MEFA", "Managerial Economics and Financial Accounting"),
+        ("OOP", "Object Oriented Programming (C++)"),
+        ("SE", "Software Engineering"),
+        ("DBMS", "Database Management System"),
+        ("DCCN", "Data Communication and Computer Networks"),
+        ("DMS", "Discrete Mathematics Structure"),
+        ("POC", "Principles of Communication"),
+        ("TC", "Technical Communication"),
+        ("TOC", "Theory of Computation"),
     ],
-    "DBMS": [
-        ("Normalization (1NF-BCNF)", "Explain 1NF, 2NF, 3NF, and BCNF with student database examples for a 10-mark question."),
-        ("ACID Properties & Transactions", "Explain ACID properties and concurrency control in DBMS with RTU past questions.")
+    3: [
+        ("AOA", "Analysis of Algorithms"),
+        ("CN", "Computer Networks"),
+        ("ITC", "Information Theory and Coding"),
+        ("MI", "Microprocessor and Interfaces"),
+        ("OS", "Operating Systems"),
+        ("AI", "Artificial Intelligence"),
+        ("CA", "Computer Architecture and Organization"),
+        ("CC", "Cloud Computing"),
+        ("CD", "Compiler Design"),
+        ("CG", "Computer Graphics & Multimedia"),
     ],
-    "BCE": [
-        ("Surveying & Levelling", "Explain methods of levelling and contouring in Basic Civil Engineering with diagrams."),
-        ("Types of Cement & Concrete", "Explain properties of concrete and types of cement as per RTU syllabus.")
+    4: [
+        ("BDA", "Big Data Analytics"),
+        ("IOT", "Internet of Things"),
+        ("ISS", "Information System Security"),
+        ("ML", "Machine Learning"),
+        ("BC", "Blockchain Technologies"),
+        ("DIP", "Digital Image Processing"),
+        ("DM", "Disaster Management"),
+        ("DS", "Distributed Systems"),
     ],
-    "BEE": [
-        ("Thevenin & Norton Theorems", "Explain Thevenin's and Norton's theorems with solved step-by-step numerical."),
-        ("Transformer Working Principle", "Explain single-phase transformer construction and working principle with EMF equation.")
-    ],
-    "OOP": [
-        ("Polymorphism & Virtual Functions", "Explain virtual functions and dynamic binding in C++ with code example."),
-        ("Constructors & Destructors", "Explain constructor types and copy constructors with C++ syntax.")
-    ],
-    "DE": [
-        ("K-Map Simplification", "Explain Karnaugh Map (K-Map) minimization with a 4-variable example."),
-        ("Flip-Flops (JK vs D)", "Compare JK and D flip-flops with state tables and excitation diagrams.")
-    ],
-    "OS": [
-        ("CPU Scheduling (RR / SJF)", "Compare Round Robin and SJF CPU scheduling algorithms with Gantt chart example."),
-        ("Deadlock & Banker's Algorithm", "Explain deadlock prevention and Banker's algorithm with resource allocation example.")
-    ],
-    "DCCN": [
-        ("OSI vs TCP/IP Model", "Compare 7-layer OSI model and TCP/IP model with layer protocols."),
-        ("Subnetting & IP Addressing", "Explain IPv4 addressing and classless subnetting with solved numerical.")
-    ],
-    "CN": [
-        ("OSI vs TCP/IP Model", "Compare 7-layer OSI model and TCP/IP model with layer protocols."),
-        ("Routing Algorithms", "Explain Distance Vector Routing and Link State Routing algorithms.")
-    ],
-    "TOC": [
-        ("DFA Construction", "Explain DFA construction with state diagrams and regular expressions."),
-        ("Turing Machine Design", "Explain Turing machine components with transition table and tape representation.")
-    ],
-    "SE": [
-        ("SDLC Models (Waterfall vs Agile)", "Compare Waterfall and Agile SDLC models with pros and cons."),
-        ("COCOMO Model Estimation", "Explain Basic, Intermediate, and Detailed COCOMO model for software estimation.")
-    ],
-    "AEM": [
-        ("Differential Equations", "Explain methods to solve second-order differential equations with RTU past numerical."),
-        ("Laplace Transforms", "Explain Laplace transform properties and inverse Laplace with solved example.")
-    ],
-    "EM-1": [
-        ("Matrices & Eigenvalues", "Explain eigenvalues and Cayley-Hamilton theorem with solved RTU numerical."),
-        ("Taylor & Maclaurin Series", "Explain Taylor series expansion with step-by-step example.")
-    ],
-    "EM-2": [
-        ("Vector Calculus (Green/Gauss)", "Explain Gauss Divergence and Stokes theorems with verification numerical."),
-        ("Fourier Series", "Explain Dirichlet conditions and Fourier series expansion for periodic functions.")
-    ],
-    "AI": [
-        ("Heuristic Search (A* / AO*)", "Explain A* search algorithm with admissibility of heuristic function and RTU example."),
-        ("Minimax & Alpha-Beta Pruning", "Explain Minimax algorithm and Alpha-Beta pruning with game tree trace.")
-    ],
-    "AOA": [
-        ("Master Theorem & Recurrences", "Explain Master Theorem cases with examples and solve recurrence relations."),
-        ("Dynamic Programming (0/1 Knapsack)", "Explain 0/1 Knapsack problem using dynamic programming with step-by-step table.")
-    ],
-    "BC": [
-        ("Consensus Mechanisms (PoW vs PoS)", "Compare Proof of Work (PoW) and Proof of Stake (PoS) consensus mechanisms in Blockchain."),
-        ("Smart Contracts & Ethereum", "Explain smart contracts lifecycle and EVM architecture in Ethereum.")
-    ],
-    "BDA": [
-        ("Hadoop MapReduce Architecture", "Explain Hadoop architecture and MapReduce execution flow with diagram."),
-        ("HDFS & Spark Ecosystem", "Explain HDFS architecture, block replication, and Spark Resilient Distributed Datasets (RDD).")
-    ],
-    "BME": [
-        ("Carnot Cycle & Heat Engines", "Explain Carnot heat engine cycle with P-V and T-S diagrams and efficiency formula."),
-        ("2-Stroke vs 4-Stroke Engines", "Compare 2-stroke and 4-stroke IC engines with working diagrams and valve timing.")
-    ],
-    "CC": [
-        ("Cloud Service Models (IaaS/PaaS/SaaS)", "Compare IaaS, PaaS, and SaaS cloud computing delivery models with real-world examples."),
-        ("Virtualization & Hypervisors", "Explain Type-1 and Type-2 hypervisors and virtualization techniques in cloud architecture.")
-    ],
-    "CD": [
-        ("LR Parsing (SLR, CLR, LALR)", "Compare SLR, CLR, and LALR parsing tables with grammar construction steps."),
-        ("Intermediate Code Generation", "Explain Three-Address Code (TAC), quadruples, and triples with syntax tree representation.")
-    ],
-    "CG": [
-        ("Bresenham Line Algorithm", "Derive Bresenham line generation algorithm with integer arithmetic and trace example."),
-        ("2D Geometric Transformations", "Explain 2D Translation, Rotation, and Scaling matrix representations with homogeneous coordinates.")
-    ],
-    "CHEM": [
-        ("Water Hardness & EDTA Method", "Explain determination of hardness of water by EDTA method with chemical reactions."),
-        ("Corrosion & Prevention", "Explain electrochemical mechanism of corrosion and methods of corrosion prevention.")
-    ],
-    "CS-ENG": [
-        ("Formal Letter & Report Writing", "Explain the structure of technical reports and formal business letters as per RTU format."),
-        ("Barriers to Communication", "Explain verbal, non-verbal, and psychological barriers to communication with remediation tips.")
-    ],
-    "DIP": [
-        ("Histogram Equalization", "Explain histogram equalization for image enhancement with mathematical formulation."),
-        ("Spatial Filtering & Edge Detection", "Explain Sobel, Prewitt, and Laplacian spatial filters for image edge detection.")
-    ],
-    "DL": [
-        ("Backpropagation Algorithm", "Explain neural network backpropagation algorithm with mathematical weight update rules."),
-        ("CNN Architecture & Pooling", "Explain Convolutional Neural Network (CNN) layers, feature maps, and pooling operations.")
-    ],
-    "DMS": [
-        ("Graph Theory & Trees", "Explain planar graphs, Euler path, Hamiltonian circuits, and tree traversal theorems."),
-        ("Pigeonhole Principle & Sets", "Explain Pigeonhole principle and mathematical induction with solved RTU discrete math problems.")
-    ],
-    "DS": [
-        ("Remote Procedure Call (RPC)", "Explain RPC mechanism and client-server stub binding with architectural diagram."),
-        ("Lamport Logical Clocks", "Explain Lamport timestamps and vector clocks for ordering events in distributed systems.")
-    ],
-    "DSR": [
-        ("Data Frames & Vectors in R", "Explain R data structures: vectors, factors, data frames, and lists with code snippets."),
-        ("Data Visualization with ggplot2", "Explain grammar of graphics and data visualization using ggplot2 in R.")
-    ],
-    "HV": [
-        ("Self-Exploration Process", "Explain self-exploration as the process for value education with natural acceptance."),
-        ("Harmony in Family & Society", "Explain 9 values in relationships (Trust, Respect, Affection) and harmony in society.")
-    ],
-    "IOT": [
-        ("IoT Architecture & Protocols", "Explain 4-layer IoT architecture and compare MQTT vs CoAP protocols."),
-        ("Sensors & Actuators in IoT", "Explain sensor interfacing, microcontroller roles, and edge computing in IoT applications.")
-    ],
-    "ISS": [
-        ("RSA Public Key Cryptography", "Explain RSA algorithm step-by-step with key generation and encryption/decryption numerical."),
-        ("DES & AES Comparison", "Compare Data Encryption Standard (DES) and Advanced Encryption Standard (AES) architectures.")
-    ],
-    "MEFA": [
-        ("Law of Demand & Elasticity", "Explain Law of Demand, elasticity types, and demand forecasting methods with graphs."),
-        ("Break-Even Analysis (BEP)", "Explain Break-Even Analysis with graphical representation and margin of safety formula.")
-    ],
-    "MI": [
-        ("8085 Microprocessor Architecture", "Explain 8085 microprocessor architecture, registers, and bus structure with block diagram."),
-        ("8085 Interrupts & Pinout", "Explain 8085 hardware and software interrupts with priority table and RIM/SIM instructions.")
-    ],
-    "ML": [
-        ("Supervised vs Unsupervised ML", "Compare supervised, unsupervised, and reinforcement learning with real-world examples."),
-        ("Decision Trees & Information Gain", "Explain ID3 Decision Tree algorithm, entropy, and information gain calculation.")
-    ],
-    "PHY": [
-        ("Interference & Newton's Rings", "Derive formula for diameter of dark and bright rings in Newton's rings experiment."),
-        ("Lasers & Einstein Coefficients", "Explain Einstein's A and B coefficients and population inversion for laser action.")
-    ],
-    "POC": [
-        ("AM & FM Modulation", "Compare Amplitude Modulation (AM) and Frequency Modulation (FM) with frequency spectra."),
-        ("Sampling Theorem & Nyquist Rate", "State and prove Nyquist-Shannon sampling theorem with aliasing effect diagram.")
-    ],
-    "TC": [
-        ("Technical Report Structure", "Explain formal structure, components, and format of technical reports for RTU exams."),
-        ("7 Cs of Effective Communication", "Explain the 7 Cs of effective communication with engineering workplace examples.")
-    ]
 }
 
-def get_quick_starters_for_subject(subj_code: str) -> List[Tuple[str, str]]:
-    if subj_code in SUBJECT_QUICK_STARTERS:
-        return SUBJECT_QUICK_STARTERS[subj_code]
-    return [
-        ("10-Mark Model Question", f"Show me a standard 10-mark Part C question and model answer for {subj_code}."),
-        ("Core Concepts & Formulas", f"Explain the core fundamental concepts, laws, and formulas of {subj_code}.")
-    ]
+FALLBACK_SUBJECTS: Dict[str, Dict[int, List[Tuple[str, str]]]] = {
+    "CSE": _CSE_IT_YEAR_SUBJECTS,
+    "IT": _CSE_IT_YEAR_SUBJECTS,
+    "ECE": {
+        1: _YEAR1_COMMON_SUBJECTS,
+        2: [("DE", "Digital Electronics")],
+        3: [("MI", "Microprocessor and Interfaces")],
+        4: [],
+    },
+    "EE": {
+        1: _YEAR1_COMMON_SUBJECTS,
+        2: [("DE", "Digital Electronics")],
+        3: [("MI", "Microprocessor and Interfaces")],
+        4: [],
+    },
+    "ME": {1: _YEAR1_COMMON_SUBJECTS, 2: [], 3: [], 4: []},
+    "CE": {1: _YEAR1_COMMON_SUBJECTS, 2: [], 3: [], 4: []},
+}
 
-# --- Initialize Session State ---
-if "messages" not in st.session_state:
-    st.session_state.messages = []
-if "session_id" not in st.session_state:
-    st.session_state.session_id = None
-if "current_quiz" not in st.session_state:
-    st.session_state.current_quiz = None
-if "quiz_feedback" not in st.session_state:
-    st.session_state.quiz_feedback = None
-if "backend_url" not in st.session_state:
-    st.session_state.backend_url = DEFAULT_BACKEND_URL
-if "backend_mode" not in st.session_state:
-    st.session_state.backend_mode = DEFAULT_BACKEND_MODE
-if "pending_prompt" not in st.session_state:
-    st.session_state.pending_prompt = None
-if "selected_page" not in st.session_state:
-    st.session_state.selected_page = "Senior Tutor Chat"
-if "student_year" not in st.session_state:
-    st.session_state.student_year = 2
-if "student_sem" not in st.session_state:
-    st.session_state.student_sem = "Sem 3"
-if "student_branch" not in st.session_state:
-    st.session_state.student_branch = "CSE"
-if "active_subject_code" not in st.session_state:
-    st.session_state.active_subject_code = "DSA"
 
-# --- Cached Embedded Engine Loader (Fallback Mode) ---
-@st.cache_resource(show_spinner="Initializing RTU Academic Intelligence Engine (FAISS + BM25 + SQLite)...")
-def get_embedded_client():
-    """
-    Initializes backend services and ASGI TestClient in-process.
-    Enables Streamlit Community Cloud to run 100% self-contained if remote server is unreachable.
-    """
+# --- HTTP Client Helpers ---
+
+def _extract_error_detail(resp: requests.Response) -> str:
+    """Extracts readable error messages from FastAPI JSON responses."""
     try:
-        from app.main import app
-        from fastapi.testclient import TestClient
-        client = TestClient(app)
-        client.__enter__()
-        return client
-    except Exception as e:
-        st.error(f"Embedded engine initialization error: {e}")
-        return None
+        data = resp.json()
+        detail = data.get("detail")
+        if isinstance(detail, list) and detail:
+            parts = []
+            for item in detail:
+                loc = item.get("loc") or []
+                field = str(loc[-1]) if loc else ""
+                msg = str(item.get("msg", "")).strip()
+                parts.append(f"{field}: {msg}" if field and field != "body" else msg)
+            return "; ".join(p for p in parts if p)
+        if detail:
+            return str(detail)
+        if isinstance(data, dict) and data.get("error"):
+            return str(data["error"])
+    except ValueError:
+        pass
+    text = (resp.text or "").strip()
+    return text[:200] if text else f"Request failed with status {resp.status_code}"
 
-# --- Unified API Dispatcher (Remote HTTP with In-Process Fallback) ---
+
 def api_request(
     method: str,
     endpoint: str,
-    backend_mode: str,
-    remote_url: str,
+    payload: Optional[Dict[str, Any]] = None,
     params: Optional[Dict[str, Any]] = None,
-    json_data: Optional[Dict[str, Any]] = None,
-    timeout: int = 30
-) -> Dict[str, Any]:
-    """
-    Dispatches request to the remote FastAPI cloud backend,
-    with automatic seamless fallback to the in-process engine.
-    """
-    if backend_mode == "Embedded Engine (Streamlit Cloud / In-Process)":
-        client = get_embedded_client()
-        if client is None:
-            return {"error": "Embedded engine is not available."}
-        try:
-            if method.upper() == "GET":
-                resp = client.get(endpoint, params=params)
-            else:
-                resp = client.post(endpoint, json=json_data)
-            return resp.json()
-        except Exception as e:
-            return {"error": str(e)}
-    else:
-        url = f"{remote_url.rstrip('/')}{endpoint}"
-        try:
-            if method.upper() == "GET":
-                resp = requests.get(url, params=params, timeout=timeout)
-            else:
-                resp = requests.post(url, json=json_data, timeout=timeout)
-            resp.raise_for_status()
-            return resp.json()
-        except Exception as e:
-            # Automatic fallback to embedded engine if remote server fails
-            client = get_embedded_client()
-            if client is not None:
-                try:
-                    if method.upper() == "GET":
-                        return client.get(endpoint, params=params).json()
-                    else:
-                        return client.post(endpoint, json=json_data).json()
-                except Exception:
-                    pass
-            return {"error": f"Connection error: {str(e)}"}
-
-def api_get(endpoint: str, backend_mode: str, remote_url: str, params: Optional[Dict[str, Any]] = None, timeout: int = 15):
-    return api_request("GET", endpoint, backend_mode, remote_url, params=params, timeout=timeout)
-
-def api_post(endpoint: str, backend_mode: str, remote_url: str, json_data: Dict[str, Any], timeout: int = 45):
-    return api_request("POST", endpoint, backend_mode, remote_url, json_data=json_data, timeout=timeout)
-
-# ==============================================================================
-# SIDEBAR (Navigation & Quick Starters)
-# ==============================================================================
-nav_items = [
-    "Senior Tutor Chat",
-    "Crash Course Planner",
-    "High-Yield Important Topics",
-    "Practice Quiz & Evaluation",
-    "Past Papers Archive"
-]
-
-with st.sidebar:
-    st.title("RTU Senior Tutor")
-    st.caption("Rajasthan Technical University Exam Coach")
-    st.markdown("---")
-
-    # 1. Navigation Menu
-    st.subheader("Navigation")
-    cur_nav_idx = nav_items.index(st.session_state.selected_page) if st.session_state.selected_page in nav_items else 0
-    selected_page = st.radio(
-        "Select Feature",
-        nav_items,
-        index=cur_nav_idx,
-        label_visibility="collapsed"
-    )
-    st.session_state.selected_page = selected_page
-
-    st.markdown("---")
-
-    # 2. Quick Starters (Using Currently Active Subject)
-    st.subheader("Quick Starters")
-    active_subj = st.session_state.get("active_subject_code", "DSA")
-    qs_topics = get_quick_starters_for_subject(active_subj)
-
-    if st.button("6-Hour Crash Plan", use_container_width=True, key="qs_side_1"):
-        st.session_state.selected_page = "Senior Tutor Chat"
-        st.session_state.pending_prompt = f"I have 6 hours left for {active_subj} exam. Give me a crash revision roadmap."
-        st.rerun()
-
-    if st.button("Important Topics", use_container_width=True, key="qs_side_2"):
-        st.session_state.selected_page = "Senior Tutor Chat"
-        st.session_state.pending_prompt = f"What are the most important topics in {active_subj}?"
-        st.rerun()
-
-    if len(qs_topics) >= 1:
-        t1_lbl, t1_prompt = qs_topics[0]
-        if st.button(t1_lbl, use_container_width=True, key="qs_side_3"):
-            st.session_state.selected_page = "Senior Tutor Chat"
-            st.session_state.pending_prompt = t1_prompt
-            st.rerun()
-
-    if len(qs_topics) >= 2:
-        t2_lbl, t2_prompt = qs_topics[1]
-        if st.button(t2_lbl, use_container_width=True, key="qs_side_4"):
-            st.session_state.selected_page = "Senior Tutor Chat"
-            st.session_state.pending_prompt = t2_prompt
-            st.rerun()
-
-    st.markdown("---")
-
-    # 3. Observability & Guardrails Status
-    st.subheader("Observability & Safety")
-    with st.expander("LangSmith Tracing", expanded=False):
-        st.markdown("**Project**: `rtu-ai-academic-assistant`")
-        st.markdown("**Status**: Active (Auto-instrumented)")
-        st.markdown("**Screening Evaluators**:")
-        st.markdown("- Syllabus Scope Gate")
-        st.markdown("- Anti-Leakage Sanitizer")
-        st.markdown("- 10-Mark Rubric Compliance")
-        st.caption("Thumbs up/down feedback is synced to LangSmith runs.")
-
-    # 4. Actions
-    if st.button("Clear Chat History", use_container_width=True):
-        st.session_state.messages = []
-        st.session_state.session_id = None
-        st.session_state.pending_prompt = None
-        st.rerun()
-
-# ==============================================================================
-# MAIN WORKSPACE HEADER
-# ==============================================================================
-st.title("RTU AI Academic Assistant & Exam Coach")
-st.markdown(
-    "Your dedicated Senior Tutor for **Rajasthan Technical University (RTU)** B.Tech examinations. "
-    "Get instant 10-mark structured answers, time-constrained crash revision roadmaps, topic weightages, and practice quizzes."
-)
-st.markdown("---")
-
-# Callbacks for strict hierarchy propagation: Year & Semester -> Branch -> Subject
-def _sync_year_change():
-    yr = st.session_state.selector_year
-    st.session_state.student_year = yr
-    st.session_state.student_sem = f"Sem {2 * yr - 1}"
-    st.session_state.selector_sem = f"Sem {2 * yr - 1}"
-    if "selector_subject" in st.session_state:
-        del st.session_state["selector_subject"]
-    st.session_state.active_subject_code = ""
-
-def _sync_sem_change():
-    st.session_state.student_sem = st.session_state.selector_sem
-    if "selector_subject" in st.session_state:
-        del st.session_state["selector_subject"]
-    st.session_state.active_subject_code = ""
-
-def _sync_branch_change():
-    st.session_state.student_branch = st.session_state.selector_branch
-    if "selector_subject" in st.session_state:
-        del st.session_state["selector_subject"]
-    st.session_state.active_subject_code = ""
-
-# ==============================================================================
-# STUDENT ACADEMIC PROFILE (Priority 1: Year & Semester, Priority 2: Branch, Priority 3: Subject)
-# ==============================================================================
-col_yr, col_sem, col_branch, col_subj = st.columns([1, 1, 1, 2])
-
-# Priority 1: Academic Year Selection
-with col_yr:
-    year_options = [1, 2, 3, 4]
-    cur_year = st.session_state.student_year
-    year_idx = year_options.index(cur_year) if cur_year in year_options else 1
-    selected_year = st.selectbox(
-        "1. Year",
-        year_options,
-        index=year_idx,
-        key="selector_year",
-        on_change=_sync_year_change
-    )
-
-# Priority 1B: Semester Selection (Dynamic according to selected Year)
-sem_map = {
-    1: ["All Year 1", "Sem 1", "Sem 2"],
-    2: ["All Year 2", "Sem 3", "Sem 4"],
-    3: ["All Year 3", "Sem 5", "Sem 6"],
-    4: ["All Year 4", "Sem 7", "Sem 8"]
-}
-avail_sems = sem_map.get(selected_year, ["All"])
-
-with col_sem:
-    cur_sem_idx = avail_sems.index(st.session_state.student_sem) if st.session_state.student_sem in avail_sems else 0
-    selected_sem = st.selectbox(
-        "2. Semester",
-        avail_sems,
-        index=cur_sem_idx,
-        key="selector_sem",
-        on_change=_sync_sem_change
-    )
-
-# Priority 2: Engineering Branch
-branch_options = ["CSE", "IT", "ECE", "EE", "ME", "CE"]
-with col_branch:
-    cur_branch_idx = branch_options.index(st.session_state.student_branch) if st.session_state.student_branch in branch_options else 0
-    selected_branch = st.selectbox(
-        "3. Branch",
-        branch_options,
-        index=cur_branch_idx,
-        key="selector_branch",
-        on_change=_sync_branch_change
-    )
-
-# Resolve integer semester filter for querying subjects
-int_sem: Optional[int] = None
-if "Sem " in selected_sem:
+    timeout: int = 90,
+) -> Tuple[Optional[Any], Optional[str]]:
+    """Sends an HTTP request to the FastAPI backend and returns (data, error_message)."""
+    url = f"{DEFAULT_BACKEND_URL}/api{endpoint}"
     try:
-        int_sem = int(selected_sem.replace("Sem ", "").strip())
+        resp = requests.request(
+            method=method.upper(),
+            url=url,
+            json=payload,
+            params=params,
+            timeout=timeout,
+        )
+    except requests.exceptions.Timeout:
+        return None, "Request timed out while waiting for the backend server."
+    except requests.exceptions.ConnectionError:
+        return None, f"Cannot connect to backend server at {DEFAULT_BACKEND_URL}."
+    except requests.exceptions.RequestException as exc:
+        return None, f"Network error: {exc}"
+
+    if resp.status_code >= 400:
+        return None, _extract_error_detail(resp)
+
+    try:
+        return resp.json(), None
     except ValueError:
-        int_sem = None
+        return {"raw": resp.text}, None
 
-# Query subjects filtered strictly by Year, Semester, and Branch
-query_params: Dict[str, Any] = {"year": selected_year, "branch": selected_branch}
-if int_sem is not None:
-    query_params["semester"] = int_sem
 
-curric_data = api_get("/api/subjects", st.session_state.backend_mode, st.session_state.backend_url, params=query_params, timeout=5)
-subject_options: List[str] = []
-subject_map: Dict[str, str] = {}
+# --- Session State & Curriculum Helpers ---
 
-if isinstance(curric_data, list) and len(curric_data) > 0:
-    for s in curric_data:
-        p_cnt = s.get("paper_count", 0)
-        status_tag = f"({p_cnt} papers)" if p_cnt > 0 else "(0 papers - Ingestion Pending)"
-        lbl = f"{s.get('short_name', '')} - {s.get('name', '')} {status_tag}"
-        subject_options.append(lbl)
-        subject_map[lbl] = s.get("short_name", "")
-else:
-    # Guaranteed canonical fallback from RTU_CURRICULUM mapping
-    fallback_subjects = []
-    if selected_year in RTU_CURRICULUM:
-        for sem_no, s_list in RTU_CURRICULUM[selected_year].items():
-            if int_sem is None or sem_no == int_sem:
-                fallback_subjects.extend(s_list)
-    for s_code, s_name in fallback_subjects:
-        lbl = f"{s_code} - {s_name} (0 papers - Ingestion Pending)"
-        subject_options.append(lbl)
-        subject_map[lbl] = s_code
+def init_session_state() -> None:
+    """Initializes persistent Streamlit session state keys cleanly."""
+    defaults: Dict[str, Any] = {
+        "auth_user": None,
+        "guest_user_id": f"guest_{uuid.uuid4().hex[:10]}",
+        "active_auth_modal": None,
+        "auth_modal_error": None,
+        "session_id": None,
+        "messages": [],
+        "feedback_map": {},
+        "conversations": [],
+        "subjects_cache": {},
+        "selected_stream": "CSE",
+        "selected_year": 2,
+        "selected_subject_label": "All Subjects",
+        "pending_stream": None,
+        "pending_year": None,
+        "pending_subject_id": None,
+    }
+    for key, value in defaults.items():
+        if key not in st.session_state:
+            st.session_state[key] = value
 
-# Priority 3: Subject Focus (Filtered strictly according to Year/Sem/Branch)
-with col_subj:
-    # Ensure current selector_subject is valid for new options
-    if "selector_subject" in st.session_state and st.session_state.selector_subject not in subject_options:
-        del st.session_state["selector_subject"]
 
-    subj_idx = 0
-    current_active_code = st.session_state.get("active_subject_code", "")
-    for idx, lbl in enumerate(subject_options):
-        if subject_map.get(lbl) == current_active_code:
-            subj_idx = idx
-            break
+def active_user_id() -> str:
+    """Returns logged-in user_id or the current session's guest_user_id."""
+    user = st.session_state.auth_user
+    if user and user.get("user_id"):
+        return str(user["user_id"])
+    return str(st.session_state.guest_user_id)
 
-    def _sync_subject_change():
-        sel_lbl = st.session_state.get("selector_subject")
-        if sel_lbl and " - " in sel_lbl:
-            st.session_state.active_subject_code = sel_lbl.split(" - ")[0].strip()
 
-    selected_subject_label = st.selectbox(
-        f"4. Subject Focus ({len(subject_options)} Available)",
-        subject_options,
-        index=subj_idx,
-        key="selector_subject",
-        on_change=_sync_subject_change
+def _apply_pending_selectors() -> None:
+    """Applies deferred Stream/Year updates before rendering sidebar selectboxes."""
+    if st.session_state.pending_stream in STREAMS:
+        st.session_state.selected_stream = st.session_state.pending_stream
+    st.session_state.pending_stream = None
+
+    if st.session_state.pending_year in YEARS:
+        st.session_state.selected_year = st.session_state.pending_year
+    st.session_state.pending_year = None
+
+
+def get_subjects_for_filter(stream: str, year: int) -> List[Dict[str, str]]:
+    """Fetches subjects filtered by Stream and Year from backend with local fallback."""
+    cache_key = f"{stream}:{year}"
+    cached = st.session_state.subjects_cache.get(cache_key)
+    if cached is not None:
+        return cached
+
+    data, err = api_request(
+        "GET",
+        "/subjects",
+        params={"branch": stream, "year": year},
+        timeout=15,
     )
-    active_subject_code = subject_map.get(selected_subject_label, "DSA")
-    if not active_subject_code and subject_options:
-        active_subject_code = subject_options[0].split(" - ")[0].strip()
-    st.session_state.active_subject_code = active_subject_code
+    items: List[Dict[str, str]] = []
+    if not err and isinstance(data, list):
+        for row in data:
+            short = str(row.get("short_name") or row.get("subject_short") or "").strip()
+            name = str(row.get("name") or short).strip()
+            subj_id = str(row.get("subject_id") or "").strip()
+            if short:
+                items.append({
+                    "subject_id": subj_id,
+                    "short_name": short,
+                    "name": name,
+                    "label": f"{short} — {name}",
+                })
+        st.session_state.subjects_cache[cache_key] = items
+        return items
 
-# Improvement 4: Sidebar paper count caption (added after subject is resolved)
-with st.sidebar:
-    _paper_count = None
-    if isinstance(curric_data, list):
-        for _s in curric_data:
-            if _s.get("short_name") == active_subject_code:
-                _paper_count = _s.get("paper_count")
-                break
-    if _paper_count is not None:
-        st.caption(f"{_paper_count} RTU past papers available for {active_subject_code}")
+    for short, name in FALLBACK_SUBJECTS.get(stream, {}).get(year, []):
+        items.append({
+            "subject_id": f"SUBJ_{short.replace('-', '')}",
+            "short_name": short,
+            "name": name,
+            "label": f"{short} — {name}",
+        })
+    return items
 
-st.markdown("---")
 
-# ==============================================================================
-# PAGE 1: Senior Tutor Chat
-# ==============================================================================
-if st.session_state.selected_page == "Senior Tutor Chat":
-    st.subheader(f"Chat with RTU Senior Tutor: {active_subject_code} (Year {selected_year}, {selected_branch})")
-    st.caption("Ask any concept, numerical, algorithm, or ask for important repeated exam questions.")
+def refresh_conversations() -> None:
+    """Refreshes the active user or guest's conversation history list from backend."""
+    data, err = api_request(
+        "GET",
+        "/conversations",
+        params={"limit": 50, "user_id": active_user_id()},
+        timeout=20,
+    )
+    if not err and isinstance(data, list):
+        st.session_state.conversations = data
 
-    # Quick Starters Bar
-    st.write("**Quick Starters:**")
-    qs_c1, qs_c2, qs_c3, qs_c4 = st.columns(4)
-    page_qs = get_quick_starters_for_subject(active_subject_code)
 
-    with qs_c1:
-        if st.button("6-Hour Crash Plan", use_container_width=True, key="qs_main_1"):
-            st.session_state.pending_prompt = f"I have 6 hours left for {active_subject_code} exam. Give me a crash revision roadmap."
-            st.rerun()
-    with qs_c2:
-        if st.button("Important Topics", use_container_width=True, key="qs_main_2"):
-            st.session_state.pending_prompt = f"What are the most important topics in {active_subject_code}?"
-            st.rerun()
-    with qs_c3:
-        if len(page_qs) >= 1:
-            t1_lbl, t1_prompt = page_qs[0]
-            if st.button(t1_lbl, use_container_width=True, key="qs_main_3"):
-                st.session_state.pending_prompt = t1_prompt
+def start_new_chat() -> None:
+    """Resets the active thread while keeping current authentication intact."""
+    st.session_state.session_id = None
+    st.session_state.messages = []
+
+
+def load_conversation(conversation_id: str) -> None:
+    """Loads a saved conversation and its messages into the active workspace."""
+    data, err = api_request("GET", f"/conversations/{conversation_id}", timeout=20)
+    if err or not isinstance(data, dict):
+        st.error(err or "Could not load conversation.")
+        return
+
+    st.session_state.session_id = data.get("session_id") or conversation_id
+    st.session_state.messages = list(data.get("messages") or [])
+    if data.get("branch") in STREAMS:
+        st.session_state.pending_stream = data["branch"]
+    if data.get("year") in YEARS:
+        st.session_state.pending_year = data["year"]
+    if data.get("subject_id"):
+        st.session_state.pending_subject_id = data["subject_id"]
+    st.rerun()
+
+
+def delete_single_conversation(conversation_id: str) -> None:
+    """Deletes one saved conversation and resets the view if it was currently open."""
+    _, err = api_request("DELETE", f"/conversations/{conversation_id}", timeout=20)
+    if err:
+        st.error(err)
+        return
+    if st.session_state.session_id == conversation_id:
+        start_new_chat()
+    refresh_conversations()
+    st.rerun()
+
+
+def delete_all_history() -> None:
+    """Deletes all saved conversations belonging to the current active account or guest."""
+    _, err = api_request(
+        "DELETE",
+        "/conversations",
+        params={"user_id": active_user_id()},
+        timeout=20,
+    )
+    if err:
+        st.error(err)
+        return
+    start_new_chat()
+    st.session_state.conversations = []
+    st.toast("Chat history deleted.")
+    st.rerun()
+
+
+def _close_auth_modal() -> None:
+    """Dismisses the sidebar auth dialog cleanly."""
+    st.session_state.active_auth_modal = None
+    st.session_state.auth_modal_error = None
+
+
+def _complete_login(profile: Dict[str, Any]) -> None:
+    """Populates auth state cleanly from login or registration response."""
+    st.session_state.auth_user = profile
+    st.session_state.active_auth_modal = None
+    st.session_state.auth_modal_error = None
+    st.session_state.session_id = None
+    st.session_state.messages = []
+    st.session_state.feedback_map = {}
+    st.session_state.conversations = []
+    branch = str(profile.get("branch") or "CSE").upper()
+    if branch in STREAMS:
+        st.session_state.pending_stream = branch
+    year_val = profile.get("year")
+    if isinstance(year_val, int) and year_val in YEARS:
+        st.session_state.pending_year = year_val
+    refresh_conversations()
+    st.rerun()
+
+
+def logout_user() -> None:
+    """Logs out and resets to an isolated empty guest session cleanly."""
+    st.session_state.auth_user = None
+    st.session_state.guest_user_id = f"guest_{uuid.uuid4().hex[:10]}"
+    st.session_state.active_auth_modal = None
+    st.session_state.auth_modal_error = None
+    st.session_state.session_id = None
+    st.session_state.messages = []
+    st.session_state.feedback_map = {}
+    st.session_state.conversations = []
+    st.session_state.pending_subject_id = None
+    st.rerun()
+
+
+# --- Minimal Dark Gemini / ChatGPT Styling ---
+
+def inject_gemini_dark_css() -> None:
+    """Applies the dark charcoal Gemini/ChatGPT layout styling."""
+    st.markdown(
+        """
+        <style>
+        #MainMenu, footer {
+            visibility: hidden;
+        }
+        [data-testid="stHeader"] {
+            background: transparent !important;
+        }
+        [data-testid="stAppViewContainer"] {
+            background-color: #0b0b0c !important;
+            color: #e8eaed !important;
+        }
+        .block-container {
+            padding-top: 2rem !important;
+            padding-bottom: 1.5rem !important;
+            max-width: 780px !important;
+        }
+
+        /* Sidebar styling */
+        [data-testid="stSidebar"] {
+            background-color: #171718 !important;
+            border-right: 1px solid rgba(255, 255, 255, 0.06);
+        }
+        [data-testid="stSidebarContent"] {
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            padding-top: 0.75rem !important;
+        }
+        [data-testid="stSidebarUserContent"] {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            padding: 0.6rem 0.75rem 0.9rem 0.75rem !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
+            gap: 0.45rem !important;
+        }
+        [data-testid="stSidebar"] .stSelectbox label p {
+            font-size: 0.76rem !important;
+            color: #9aa0a6 !important;
+            margin-bottom: 0.1rem !important;
+        }
+        [data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div {
+            background-color: #202123 !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 10px !important;
+            min-height: 36px !important;
+            font-size: 0.85rem !important;
+        }
+        [data-testid="stSidebar"] button {
+            text-align: left !important;
+            justify-content: flex-start !important;
+            border-radius: 10px !important;
+            border: none !important;
+            font-size: 0.86rem !important;
+            min-height: 36px !important;
+            padding: 0.35rem 0.65rem !important;
+            transition: background-color 0.15s ease;
+        }
+        [data-testid="stSidebar"] button[kind="secondary"] {
+            background-color: transparent !important;
+            color: #d7dade !important;
+        }
+        [data-testid="stSidebar"] button[kind="secondary"]:hover {
+            background-color: #26272a !important;
+            color: #ffffff !important;
+        }
+        [data-testid="stSidebar"] button[kind="primary"] {
+            background-color: #26282b !important;
+            color: #ffffff !important;
+            font-weight: 500 !important;
+        }
+        [data-testid="stSidebar"] button[kind="primary"]:hover {
+            background-color: #2e3034 !important;
+        }
+
+        .sidebar-history-hdr {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #9aa0a6;
+            padding: 0.35rem 0.25rem 0.1rem 0.25rem;
+        }
+        .sidebar-account-row {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            padding: 0.45rem 0.35rem 0.35rem 0.35rem;
+        }
+        .sidebar-avatar {
+            width: 32px;
+            height: 32px;
+            border-radius: 999px;
+            background: #2b2d31;
+            color: #e8eaed;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.84rem;
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+        .sidebar-user-meta {
+            line-height: 1.25;
+            overflow: hidden;
+        }
+        .sidebar-user-name {
+            font-size: 0.86rem;
+            font-weight: 600;
+            color: #eceff1;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .sidebar-user-sub {
+            font-size: 0.74rem;
+            color: #9aa0a6;
+        }
+
+        /* Hide noisy default Streamlit chat avatars & boxy frames */
+        [data-testid="stChatMessageAvatarUser"],
+        [data-testid="stChatMessageAvatarAssistant"],
+        [data-testid^="chatAvatarIcon"] {
+            display: none !important;
+        }
+        [data-testid="stChatMessage"] {
+            background-color: transparent !important;
+            border: none !important;
+            padding: 0.45rem 0 !important;
+        }
+
+        /* User right-aligned rounded pill matching Gemini dark view */
+        .user-bubble-wrap {
+            display: flex;
+            justify-content: flex-end;
+            width: 100%;
+            margin: 0.15rem 0;
+        }
+        .user-bubble {
+            background-color: #242527;
+            color: #f1f3f4;
+            padding: 0.65rem 1.15rem;
+            border-radius: 22px;
+            max-width: 78%;
+            font-size: 0.96rem;
+            line-height: 1.5;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+
+        /* Empty welcome screen */
+        .welcome-empty {
+            text-align: center;
+            margin: 22vh auto 2rem auto;
+            max-width: 540px;
+        }
+        .welcome-empty h2 {
+            font-size: 1.9rem;
+            font-weight: 500;
+            color: #e8eaed;
+            margin-bottom: 0.45rem;
+            letter-spacing: -0.02em;
+        }
+        .welcome-empty p {
+            font-size: 0.88rem;
+            color: #9aa0a6;
+            margin: 0;
+        }
+
+        /* Inline feedback buttons under assistant replies */
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] button {
+            background: transparent !important;
+            border: none !important;
+            color: #ffffff !important;
+            padding: 0.15rem 0.4rem !important;
+            min-height: 30px !important;
+            border-radius: 8px !important;
+            box-shadow: none !important;
+        }
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] button span,
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] button svg {
+            color: #ffffff !important;
+            fill: currentColor !important;
+        }
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] button:hover {
+            background: rgba(255, 255, 255, 0.12) !important;
+            color: #ffffff !important;
+        }
+        [data-testid="stMain"] [data-testid="stHorizontalBlock"] button[kind="primary"] {
+            background: rgba(255, 255, 255, 0.18) !important;
+            color: #ffffff !important;
+        }
+
+        /* Bottom pill chat input */
+        [data-testid="stBottom"] {
+            background-color: #0b0b0c !important;
+        }
+        [data-testid="stBottom"] > div {
+            background-color: #0b0b0c !important;
+            padding-bottom: 0.45rem !important;
+        }
+        [data-testid="stBottom"] > div::after {
+            content: "RTU Senior Tutor uses past-year papers and can make mistakes.";
+            display: block;
+            text-align: center;
+            font-size: 0.74rem;
+            color: #8e918f;
+            margin-top: 0.35rem;
+        }
+        [data-testid="stChatInput"] {
+            max-width: 780px !important;
+            margin: 0 auto !important;
+        }
+        [data-testid="stChatInput"] > div {
+            background-color: #1e1f20 !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
+            border-radius: 28px !important;
+            padding: 0.25rem 0.5rem !important;
+        }
+        [data-testid="stChatInput"] textarea {
+            color: #e8eaed !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def render_copy_icon_button(text: str, button_id: str) -> None:
+    """Renders a compact borderless clipboard copy icon matching the assistant toolbar."""
+    escaped_text = json.dumps(text)
+    widget_html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+    <style>
+      body {{
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        height: 30px;
+      }}
+      .copy-btn {{
+        background: transparent;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        width: 30px;
+        height: 30px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        transition: background 0.15s, color 0.15s;
+      }}
+      .copy-btn:hover {{
+        background: rgba(255, 255, 255, 0.12);
+        color: #ffffff;
+      }}
+    </style>
+    </head>
+    <body>
+      <button id="btn_{button_id}" class="copy-btn" title="Copy" aria-label="Copy">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+          <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+        </svg>
+      </button>
+      <script>
+        const textToCopy = {escaped_text};
+        const btn = document.getElementById("btn_{button_id}");
+        const checkSvg = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#8ab4f8" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+        const copySvg = btn.innerHTML;
+        btn.addEventListener("click", async () => {{
+          try {{
+            await navigator.clipboard.writeText(textToCopy);
+          }} catch (e) {{
+            const ta = document.createElement("textarea");
+            ta.value = textToCopy;
+            document.body.appendChild(ta);
+            ta.select();
+            document.execCommand("copy");
+            document.body.removeChild(ta);
+          }}
+          btn.innerHTML = checkSvg;
+          setTimeout(() => {{ btn.innerHTML = copySvg; }}, 1400);
+        }});
+      </script>
+    </body>
+    </html>
+    """
+    components.html(widget_html, height=32)
+
+
+def _submit_feedback(message_id: str, trace_id: Optional[str], rating: str) -> None:
+    """Sends thumbs-up/down verdict for an assistant message to the backend."""
+    _, err = api_request(
+        "POST",
+        "/feedback",
+        payload={
+            "session_id": st.session_state.session_id,
+            "message_id": message_id,
+            "trace_id": trace_id,
+            "rating": rating,
+        },
+        timeout=15,
+    )
+    if err:
+        st.toast(f"Feedback error: {err}")
+        return
+    st.session_state.feedback_map[message_id] = rating
+    st.toast("Marked as correct." if rating == "up" else "Marked as incorrect.")
+
+
+def render_assistant_footer(msg: Dict[str, Any], index: int) -> None:
+    """Renders compact Thumbs Up, Thumbs Down, and Copy icons below an assistant reply."""
+    content = str(msg.get("content") or "")
+    msg_id = msg.get("message_id")
+    trace_id = msg.get("trace_id")
+
+    if msg_id:
+        col_up, col_down, col_copy, _ = st.columns([0.055, 0.055, 0.055, 0.835])
+        current = st.session_state.feedback_map.get(msg_id)
+        with col_up:
+            if st.button(
+                "",
+                icon=":material/thumb_up:",
+                key=f"fb_up_{index}_{msg_id}",
+                type="primary" if current == "up" else "secondary",
+                help="Good response",
+            ):
+                _submit_feedback(msg_id, trace_id, "up")
                 st.rerun()
-    with qs_c4:
-        if len(page_qs) >= 2:
-            t2_lbl, t2_prompt = page_qs[1]
-            if st.button(t2_lbl, use_container_width=True, key="qs_main_4"):
-                st.session_state.pending_prompt = t2_prompt
+        with col_down:
+            if st.button(
+                "",
+                icon=":material/thumb_down:",
+                key=f"fb_down_{index}_{msg_id}",
+                type="primary" if current == "down" else "secondary",
+                help="Bad response",
+            ):
+                _submit_feedback(msg_id, trace_id, "down")
                 st.rerun()
+        with col_copy:
+            render_copy_icon_button(content, f"msg_{index}_{msg_id}")
+    else:
+        col_copy, _ = st.columns([0.055, 0.945])
+        with col_copy:
+            render_copy_icon_button(content, f"msg_{index}")
 
-    # Render Conversation History
-    for idx, msg in enumerate(st.session_state.messages):
-        with st.chat_message(msg["role"]):
-            st.markdown(msg["content"])
-            if msg.get("citations") and len(msg["citations"]) > 0:
-                hist_citations = msg["citations"]
-                hist_years = [c.get("year") for c in hist_citations if c.get("year") and str(c.get("year")).isdigit()]
-                h_pids = set(c.get("source_pdf") or c.get("paper_id") for c in hist_citations if (c.get("source_pdf") or c.get("paper_id")))
-                h_src_cnt = len(h_pids)
-                h_paper_str = f"{len(hist_citations)} questions from {h_src_cnt} {'paper' if h_src_cnt == 1 else 'papers'}"
-                if hist_years:
-                    h_min = min(int(y) for y in hist_years)
-                    h_max = max(int(y) for y in hist_years)
-                    h_range = str(h_min) if h_min == h_max else f"{h_min}-{h_max}"
-                    hist_label = f"RTU Past Paper References ({h_paper_str}, {h_range})"
-                else:
-                    hist_label = f"RTU Past Paper References ({h_paper_str})"
-                with st.expander(hist_label):
-                    for c_idx, c in enumerate(hist_citations):
-                        st.markdown(
-                            f"**{c_idx + 1}. {c.get('paper_name', 'RTU Past Paper')}** (Year: {c.get('year', '-')}) | "
-                            f"*Question ID:* `{c.get('question_id', '-')}` | "
-                            f"*Marks:* **{c.get('marks', '-')}**"
-                        )
-                        if c.get("question_text"):
-                            st.caption(f"\"{c.get('question_text')}\"")
 
-            if msg["role"] == "assistant":
-                msg_id = msg.get("message_id", f"msg_{idx}")
-                trace_id = msg.get("trace_id")
-                screening = msg.get("screening", {})
+# --- Auth Modals (Opened from Sidebar Bottom-Left) ---
 
-                # LangSmith Tracing & Academic Screening Status
-                if trace_id or screening:
-                    sc_ok = screening.get("is_safe", True) and screening.get("is_in_syllabus", True)
-                    sc_badge = "Screening: Passed" if sc_ok else "Screening: Guardrail Active"
-                    trace_display = f"`{trace_id[:12]}...`" if trace_id else "Local"
-                    st.caption(
-                        f"LangSmith Trace: {trace_display} | {sc_badge} "
-                        f"(Scope: {screening.get('scope_score', 1.0):.1f}, "
-                        f"Format: {screening.get('format_score', 1.0):.1f})"
-                    )
+@st.dialog("Log In", width="small", on_dismiss=_close_auth_modal)
+def show_login_dialog() -> None:
+    """Modal login dialog triggered from bottom-left sidebar."""
+    if st.session_state.auth_modal_error:
+        st.error(st.session_state.auth_modal_error)
 
-                feedback_val = st.feedback("thumbs", key=f"fb_{msg_id}_{idx}")
-                if feedback_val is not None and not msg.get("feedback_submitted"):
-                    rating_score = 1 if feedback_val == 1 else -1
-                    api_post(
-                        "/api/feedback",
-                        st.session_state.backend_mode,
-                        st.session_state.backend_url,
-                        {
-                            "session_id": st.session_state.session_id or "default_session",
-                            "message_id": msg_id,
-                            "trace_id": trace_id,
-                            "rating": rating_score,
-                            "comment": "Streamlit thumbs feedback synced with LangSmith"
-                        }
-                    )
-                    msg["feedback_submitted"] = True
-                    st.caption("Feedback saved to database & synced to LangSmith.")
-
-    # Chat Input Handling
-    user_input = st.chat_input(f"Ask what you want to prepare in {active_subject_code}... (e.g., Explain QuickSort algorithm and time complexity)")
-    prompt_to_send = st.session_state.pending_prompt or user_input
-
-    if prompt_to_send:
-        # Clear pending prompt
-        st.session_state.pending_prompt = None
-
-        # Append User Message
-        st.session_state.messages.append({"role": "user", "content": prompt_to_send})
-        with st.chat_message("user"):
-            st.markdown(prompt_to_send)
-
-        # Generate Assistant Response
-        with st.chat_message("assistant"):
-            with st.spinner("Thinking..."):
-                payload = {
-                    "message": prompt_to_send,
-                    "session_id": st.session_state.session_id,
-                    "filters": {
-                        "subject": active_subject_code,
-                        "branch": selected_branch,
-                        "year": selected_year
-                    }
-                }
-                _t0 = time.perf_counter()
-                res = api_post(
-                    "/api/chat",
-                    st.session_state.backend_mode,
-                    st.session_state.backend_url,
-                    payload,
-                    timeout=60
-                )
-                _t1 = time.perf_counter()
-
-                if "error" in res:
-                    err_text = res["error"]
-                    if "Connection" in err_text or "connection" in err_text:
-                        error_msg = "Backend is starting up. Please wait 10 seconds and try again."
-                    else:
-                        error_msg = f"Connection error: {err_text}. Please make sure your backend engine is running."
-                    st.error(error_msg)
-                    st.session_state.messages.append({"role": "assistant", "content": error_msg})
-                else:
-                    assistant_reply = res.get("response", "")
-                    if not assistant_reply:
-                        assistant_reply = "No matching RTU past examination questions found for this topic. Try rephrasing with the subject name (e.g., 'DSA quicksort' or 'DBMS normalization')."
-                    citations = res.get("citations", [])
-                    st.session_state.session_id = res.get("session_id", st.session_state.session_id)
-
-                    st.markdown(assistant_reply)
-
-                    # Improvement 2: Latency indicator
-                    latency_ms = res.get("latency_ms") or int((_t1 - _t0) * 1000)
-                    st.caption(f"Response time: {latency_ms} ms")
-
-                    if citations:
-                        # Citation count badge with real source paper count and year range
-                        citation_years = [c.get("year") for c in citations if c.get("year") and str(c.get("year")).isdigit()]
-                        pids = set(c.get("source_pdf") or c.get("paper_id") for c in citations if (c.get("source_pdf") or c.get("paper_id")))
-                        src_cnt = len(pids)
-                        paper_str = f"{len(citations)} questions from {src_cnt} {'paper' if src_cnt == 1 else 'papers'}"
-                        if citation_years:
-                            min_yr = min(int(y) for y in citation_years)
-                            max_yr = max(int(y) for y in citation_years)
-                            year_range = str(min_yr) if min_yr == max_yr else f"{min_yr}-{max_yr}"
-                            expander_label = f"RTU Past Paper References ({paper_str}, {year_range})"
-                        else:
-                            expander_label = f"RTU Past Paper References ({paper_str})"
-                        with st.expander(expander_label):
-                            for idx, c in enumerate(citations):
-                                st.markdown(
-                                    f"**{idx + 1}. {c.get('paper_name', 'RTU Past Paper')}** (Year: {c.get('year', '-')}) | "
-                                    f"*Question ID:* `{c.get('question_id', '-')}` | "
-                                    f"*Marks:* **{c.get('marks', '-')}**"
-                                )
-                                if c.get("question_text"):
-                                    st.caption(f"\"{c.get('question_text')}\"")
-
-                    assistant_msg_id = res.get("assistant_message", {}).get("message_id") or f"msg_{len(st.session_state.messages)}"
-                    st.session_state.messages.append({
-                        "role": "assistant",
-                        "content": assistant_reply,
-                        "citations": citations,
-                        "message_id": assistant_msg_id,
-                        "trace_id": res.get("trace_id"),
-                        "screening": res.get("screening", {})
-                    })
-
-# ------------------------------------------------------------------------------
-# PAGE 2: Crash Course Planner
-# ------------------------------------------------------------------------------
-elif st.session_state.selected_page == "Crash Course Planner":
-    col_p1, col_p2 = st.columns([3, 1])
-    with col_p1:
-        hours_input = st.slider(f"Hours left until your {active_subject_code} exam", min_value=1.0, max_value=12.0, value=6.0, step=0.5)
-    with col_p2:
-        generate_btn = st.button("Generate Roadmap", use_container_width=True, type="primary")
-
-    st.subheader(f"Urgent Exam Revision Planner: {active_subject_code} (Year {selected_year})")
-    st.caption("Generate a customized, hour-by-hour revision plan based on real topic mark weightages from verified RTU past exam papers.")
-
-    if generate_btn:
-        with st.spinner(f"Analyzing RTU paper frequency for {active_subject_code} across {hours_input} hours..."):
-            plan_res = api_post(
-                "/api/plan",
-                st.session_state.backend_mode,
-                st.session_state.backend_url,
-                {"subject_id": active_subject_code, "hours_left": hours_input},
-                timeout=20
-            )
-
-            if "error" in plan_res:
-                st.error(f"Failed to generate plan: {plan_res['error']}")
-            else:
-                schedule = plan_res.get("schedule", [])
-                st.success(f"Generated {len(schedule)}-Slot Revision Plan for **{active_subject_code}** ({hours_input:.1f} Hours Available)")
-
-                for item in schedule:
-                    with st.container():
-                        st.markdown(f"#### Slot {item.get('slot_number', '-')}: {item.get('time_window', '')}")
-                        col_a, col_b = st.columns([3, 1])
-                        with col_a:
-                            st.write(f"**Topic:** {item.get('topic_name', '-')}")
-                            st.caption(f"Strategy: {item.get('action', item.get('strategy', 'Revise key definitions & diagrams'))}")
-                        with col_b:
-                            st.info(f"**Priority:** {item.get('marks_priority', 'High Yield')}")
-                        st.divider()
-
-                st.markdown("### RTU Examiner Scoring Strategy")
-                st.markdown(
-                    "- **Part C (10/15 Marks):** Always draw a neat, labeled block diagram or state-transition table.\n"
-                    "- **Time Complexity:** Include explicit recurrence relations and Big-O notation.\n"
-                    "- **Highlight:** Put boxes around final mathematical derivations or numerical values."
-                )
-
-# ------------------------------------------------------------------------------
-# PAGE 3: High-Yield Important Topics
-# ------------------------------------------------------------------------------
-elif st.session_state.selected_page == "High-Yield Important Topics":
-    st.subheader(f"High-Yield Important Topics: {active_subject_code} (Year {selected_year})")
-    st.caption("Topics ranked by marks weightage and frequency across verified RTU past examination papers.")
-
-    with st.spinner(f"Fetching topic frequency data for {active_subject_code}..."):
-        topics_data = api_get(
-            f"/api/topics/SUBJ_{active_subject_code}/important",
-            st.session_state.backend_mode,
-            st.session_state.backend_url,
-            timeout=10
+    with st.form("modal_login_form", clear_on_submit=False):
+        identifier = st.text_input(
+            "Roll Number or Email",
+            key="login_identifier",
+            placeholder="e.g. 22EGJCS001 or student@rtu.ac.in",
         )
-        if "error" in topics_data:
-            topics_data = api_get(
-                f"/api/topics/{active_subject_code}/important",
-                st.session_state.backend_mode,
-                st.session_state.backend_url,
-                timeout=10
+        password = st.text_input("Password", type="password", key="login_password")
+        col_submit, col_switch = st.columns(2)
+        with col_submit:
+            submitted = st.form_submit_button("Log In", type="primary", use_container_width=True)
+        with col_switch:
+            go_signup = st.form_submit_button("Create account", use_container_width=True)
+
+    if go_signup:
+        st.session_state.auth_modal_error = None
+        st.session_state.active_auth_modal = "signup"
+        st.rerun()
+
+    if submitted:
+        if not identifier.strip() or not password:
+            st.session_state.auth_modal_error = "Please enter both your roll number/email and password."
+            st.rerun()
+        profile, err = api_request(
+            "POST",
+            "/auth/login",
+            payload={"roll_no_or_email": identifier.strip(), "password": password},
+            timeout=20,
+        )
+        if err or not isinstance(profile, dict):
+            st.session_state.auth_modal_error = err or "Invalid roll number/email or password."
+            st.rerun()
+        _complete_login(profile)
+
+
+@st.dialog("Sign Up", width="small", on_dismiss=_close_auth_modal)
+def show_signup_dialog() -> None:
+    """Modal signup dialog triggered from bottom-left sidebar."""
+    if st.session_state.auth_modal_error:
+        st.error(st.session_state.auth_modal_error)
+
+    with st.form("modal_signup_form", clear_on_submit=False):
+        name = st.text_input("Full Name", key="signup_name", placeholder="e.g. Aarav Sharma")
+        roll_no = st.text_input("RTU Roll Number", key="signup_roll", placeholder="e.g. 22EGJCS045")
+        email = st.text_input("Email (Optional)", key="signup_email", placeholder="e.g. aarav@rtu.ac.in")
+        col_stream, col_year = st.columns(2)
+        with col_stream:
+            stream = st.selectbox("Stream", STREAMS, index=0, key="signup_stream")
+        with col_year:
+            year = st.selectbox(
+                "Year",
+                YEARS,
+                index=1,
+                key="signup_year",
+                format_func=lambda y: YEAR_LABELS[y],
             )
+        password = st.text_input("Password", type="password", key="signup_password", help="Minimum 4 characters")
+        col_submit, col_switch = st.columns(2)
+        with col_submit:
+            signed_up = st.form_submit_button("Sign Up", type="primary", use_container_width=True)
+        with col_switch:
+            go_login = st.form_submit_button("Already have account", use_container_width=True)
 
-        ranked = topics_data.get("ranked_topics", [])
-        if ranked:
-            df = pd.DataFrame(ranked)
-            display_cols = ["rank", "topic_name", "unit_no", "total_marks", "paper_appearances", "importance_level"]
-            present_cols = [c for c in display_cols if c in df.columns]
-            renamed = {
-                "rank": "Rank",
-                "topic_name": "Topic Name",
-                "unit_no": "Unit",
-                "total_marks": "Total Marks in PYQs",
-                "paper_appearances": "Papers Appeared",
-                "importance_level": "Priority Level"
-            }
-            st.dataframe(df[present_cols].rename(columns=renamed), use_container_width=True)
-        else:
-            st.info(f"No explicit ranking records found for {active_subject_code}.")
+    if go_login:
+        st.session_state.auth_modal_error = None
+        st.session_state.active_auth_modal = "login"
+        st.rerun()
 
-# ------------------------------------------------------------------------------
-# PAGE 4: Practice Quiz & Examiner Evaluation
-# ------------------------------------------------------------------------------
-elif st.session_state.selected_page == "Practice Quiz & Evaluation":
-    st.subheader(f"RTU Practice Exam & Instant Evaluation: {active_subject_code} (Year {selected_year})")
-    st.caption("Test your knowledge on real RTU past examination questions and get evaluated on RTU's official 0-10 rubric.")
+    if signed_up:
+        if len(name.strip()) < 2:
+            st.session_state.auth_modal_error = "Name must be at least 2 characters."
+            st.rerun()
+        if len(roll_no.strip()) < 2:
+            st.session_state.auth_modal_error = "Roll number must be at least 2 characters."
+            st.rerun()
+        if len(password) < 4:
+            st.session_state.auth_modal_error = "Password must be at least 4 characters."
+            st.rerun()
+        profile, err = api_request(
+            "POST",
+            "/auth/register",
+            payload={
+                "name": name.strip(),
+                "roll_no": roll_no.strip(),
+                "email": email.strip() or None,
+                "branch": stream,
+                "year": year,
+                "password": password,
+            },
+            timeout=20,
+        )
+        if err or not isinstance(profile, dict):
+            st.session_state.auth_modal_error = err or "Registration failed."
+            st.rerun()
+        _complete_login(profile)
 
-    col_q1, col_q2 = st.columns([3, 1])
-    with col_q1:
-        st.write(f"Click below to draw a verified RTU examination question for **{active_subject_code}**:")
-    with col_q2:
-        fetch_question_btn = st.button("Fetch New RTU Question", type="primary", use_container_width=True)
 
-    if fetch_question_btn:
-        with st.spinner(f"Selecting question from RTU {active_subject_code} question papers..."):
-            quiz_q = api_post(
-                "/api/quiz/next",
-                st.session_state.backend_mode,
-                st.session_state.backend_url,
-                {"subject_id": active_subject_code},
-                timeout=15
-            )
-            if "error" in quiz_q:
-                st.error(f"Error fetching quiz question: {quiz_q['error']}")
-            else:
-                st.session_state.current_quiz = quiz_q
-                st.session_state.quiz_feedback = None
+# --- Sidebar & Workspace Renderers ---
 
-    if st.session_state.current_quiz:
-        q = st.session_state.current_quiz
-        st.markdown(f"### Question (Max Marks: {q.get('max_marks', 10)})")
-        st.info(f"**\"{q.get('question_text', '')}\"**\n\n*(Unit {q.get('unit_no', '-')}, RTU Past Exam)*")
+def render_sidebar() -> Tuple[str, int, Optional[str]]:
+    """Renders sidebar: New chat, Stream/Year/Subject, History + Delete, and bottom-left Auth."""
+    _apply_pending_selectors()
+    auth_user = st.session_state.auth_user
 
-        student_answer = st.text_area(
-            "Write your answer here (definitions, key algorithm steps, diagrams in text, complexities):",
-            height=200,
-            placeholder="Type your exam-standard answer here..."
+    with st.sidebar:
+        if st.button("New chat", key="new_chat_btn", icon=":material/edit_square:", use_container_width=True):
+            start_new_chat()
+            st.rerun()
+
+        stream = st.selectbox("Stream", STREAMS, key="selected_stream")
+        year = st.selectbox(
+            "Year",
+            YEARS,
+            key="selected_year",
+            format_func=lambda y: YEAR_LABELS[y],
         )
 
-        if st.button("Submit for RTU Examiner Grading", type="primary"):
-            if not student_answer.strip():
-                st.warning("Please type your answer before submitting.")
-            else:
-                with st.spinner("Examiner is grading your answer against RTU rubric..."):
-                    eval_res = api_post(
-                        "/api/quiz/answer",
-                        st.session_state.backend_mode,
-                        st.session_state.backend_url,
-                        {
-                            "question_id": q.get("question_id"),
-                            "student_answer": student_answer
-                        },
-                        timeout=30
-                    )
-                    if "error" in eval_res:
-                        st.error(f"Evaluation failed: {eval_res['error']}")
-                    else:
-                        st.session_state.quiz_feedback = eval_res
+        subjects = get_subjects_for_filter(stream, year)
+        subject_options = ["All Subjects"] + [item["label"] for item in subjects]
+        label_to_short = {item["label"]: item["short_name"] for item in subjects}
+        id_to_label = {item["subject_id"]: item["label"] for item in subjects}
 
-    if st.session_state.quiz_feedback:
-        fb = st.session_state.quiz_feedback
-        st.markdown("---")
-        st.subheader("RTU Examiner Scorecard")
-        score = fb.get("score", 0)
-        max_marks = fb.get("max_score", 10)
+        if st.session_state.pending_subject_id:
+            matched_label = id_to_label.get(st.session_state.pending_subject_id)
+            if matched_label in subject_options:
+                st.session_state.selected_subject_label = matched_label
+            st.session_state.pending_subject_id = None
 
-        col_s1, col_s2 = st.columns([1, 3])
-        with col_s1:
-            st.metric("Total Score", f"{score:.1f} / {max_marks}")
-        with col_s2:
-            st.write(f"**Examiner Verdict:** {fb.get('feedback', '')}")
+        if st.session_state.selected_subject_label not in subject_options:
+            st.session_state.selected_subject_label = "All Subjects"
 
-        breakdown = fb.get("breakdown", {})
-        if breakdown:
-            st.write("**Rubric Breakdown:**")
-            st.json(breakdown)
+        subject_label = st.selectbox("Subject", subject_options, key="selected_subject_label")
+        subject_short = label_to_short.get(subject_label)
 
-# ------------------------------------------------------------------------------
-# PAGE 5: Past Papers Archive
-# ------------------------------------------------------------------------------
-elif st.session_state.selected_page == "Past Papers Archive":
-    st.subheader("Verified RTU Past Papers Archive (2012-2024)")
-    st.caption("Browse and review official Rajasthan Technical University semester examination papers.")
+        conversations = st.session_state.conversations
+        col_hdr, col_clr = st.columns([0.74, 0.26])
+        with col_hdr:
+            st.markdown('<div class="sidebar-history-hdr">Chats</div>', unsafe_allow_html=True)
+        with col_clr:
+            if conversations and st.button(
+                "🗑",
+                key="delete_all_history_btn",
+                help="Delete all chat history",
+                use_container_width=True,
+            ):
+                delete_all_history()
 
-    with st.spinner("Loading papers catalog..."):
-        papers = api_get("/api/papers", st.session_state.backend_mode, st.session_state.backend_url, timeout=10)
-        if isinstance(papers, list) and len(papers) > 0:
-            df_papers = pd.DataFrame(papers)
-
-            # Filter options
-            years = sorted(list(set(df_papers["year"].dropna().astype(int).tolist())), reverse=True)
-            filter_year = st.multiselect("Filter by Examination Year", years, default=years[:5])
-
-            filtered_df = df_papers
-            if filter_year:
-                filtered_df = filtered_df[filtered_df["year"].isin(filter_year)]
-
-            st.write(f"Showing **{len(filtered_df)}** verified RTU question papers:")
-
-            display_cols = ["paper_id", "subject", "subject_code", "year", "session", "question_count"]
-            renamed = {
-                "paper_id": "Paper ID",
-                "subject": "Subject Name",
-                "subject_code": "Code",
-                "year": "Year",
-                "session": "Session",
-                "question_count": "Questions"
-            }
-            st.dataframe(filtered_df[display_cols].rename(columns=renamed), use_container_width=True)
+        if not conversations:
+            st.caption("No chats yet.")
         else:
-            st.info("No papers returned from backend.")
+            for conv in conversations:
+                conv_id = conv.get("conversation_id") or conv.get("session_id")
+                if not conv_id:
+                    continue
+                title = str(conv.get("title") or "Untitled chat").strip()
+                is_active = conv_id == st.session_state.session_id
+
+                col_title, col_del = st.columns([0.82, 0.18])
+                with col_title:
+                    if st.button(
+                        title,
+                        key=f"hist_open_{conv_id}",
+                        type="primary" if is_active else "secondary",
+                        use_container_width=True,
+                    ):
+                        load_conversation(conv_id)
+                with col_del:
+                    if st.button(
+                        "✕",
+                        key=f"hist_del_{conv_id}",
+                        help="Delete this chat",
+                        use_container_width=True,
+                    ):
+                        delete_single_conversation(conv_id)
+
+        st.markdown('<div style="flex: 1 1 auto; min-height: 1.5rem;"></div>', unsafe_allow_html=True)
+        st.divider()
+
+        # Bottom-left Account / Auth Bar
+        if auth_user:
+            display_name = str(auth_user.get("name") or "Student")
+            initial = display_name[:1].upper()
+            user_branch = auth_user.get("branch") or stream
+            user_year = auth_user.get("year") or year
+            st.markdown(
+                f"""
+                <div class="sidebar-account-row">
+                    <div class="sidebar-avatar">{html.escape(initial)}</div>
+                    <div class="sidebar-user-meta">
+                        <div class="sidebar-user-name">{html.escape(display_name)}</div>
+                        <div class="sidebar-user-sub">{html.escape(str(user_branch))} · Year {html.escape(str(user_year))}</div>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            if st.button("Log Out", key="logout_btn", icon=":material/logout:", use_container_width=True):
+                logout_user()
+        else:
+            col_login, col_signup = st.columns(2)
+            with col_login:
+                if st.button("Log In", key="open_login_btn", use_container_width=True):
+                    st.session_state.auth_modal_error = None
+                    st.session_state.active_auth_modal = "login"
+                    st.rerun()
+            with col_signup:
+                if st.button("Sign Up", key="open_signup_btn", use_container_width=True):
+                    st.session_state.auth_modal_error = None
+                    st.session_state.active_auth_modal = "signup"
+                    st.rerun()
+
+    return stream, year, subject_short
+
+
+def render_citations(citations: List[Dict[str, Any]]) -> None:
+    """Renders compact collapsible past-paper source citations."""
+    if not citations:
+        return
+    with st.expander(f"Sources ({len(citations)})", expanded=False):
+        for cit in citations:
+            subj = cit.get("subject") or "RTU"
+            yr = cit.get("year") or ""
+            sec = cit.get("section") or ""
+            marks = cit.get("marks")
+            pdf = cit.get("source_pdf") or ""
+            page = cit.get("page_number")
+            meta_parts = [p for p in [subj, str(yr) if yr else "", sec, f"{marks}M" if marks else ""] if p]
+            location = f"{pdf} (p. {page})" if pdf and page else pdf
+            st.markdown(f"- **{' · '.join(meta_parts)}** — `{location}`" if location else f"- **{' · '.join(meta_parts)}**")
+
+
+def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) -> None:
+    """Renders the dark full-screen Gemini/ChatGPT conversation canvas."""
+    active_subject = subject_short or "All Subjects"
+
+    if not st.session_state.messages:
+        st.markdown(
+            f"""
+            <div class="welcome-empty">
+                <h2>What can I help you with today?</h2>
+                <p>{html.escape(stream)} · {html.escape(YEAR_LABELS[year])} · {html.escape(active_subject)}</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    else:
+        for idx, msg in enumerate(st.session_state.messages):
+            role = msg.get("role", "assistant")
+            content = str(msg.get("content") or "")
+            if role == "user":
+                with st.chat_message("user"):
+                    st.markdown(
+                        f'<div class="user-bubble-wrap"><div class="user-bubble">{html.escape(content)}</div></div>',
+                        unsafe_allow_html=True,
+                    )
+            else:
+                with st.chat_message("assistant"):
+                    st.markdown(content)
+                    render_citations(msg.get("citations") or [])
+                    render_assistant_footer(msg, idx)
+
+    prompt = st.chat_input("Ask any RTU exam question...")
+    if not prompt or not prompt.strip():
+        return
+
+    user_text = prompt.strip()
+    st.session_state.messages.append({"role": "user", "content": user_text})
+    with st.chat_message("user"):
+        st.markdown(
+            f'<div class="user-bubble-wrap"><div class="user-bubble">{html.escape(user_text)}</div></div>',
+            unsafe_allow_html=True,
+        )
+
+    payload: Dict[str, Any] = {
+        "message": user_text,
+        "session_id": st.session_state.session_id,
+        "user_id": active_user_id(),
+        "branch": stream,
+        "year": year,
+    }
+    if subject_short:
+        payload["filters"] = {"subject": subject_short}
+
+    with st.chat_message("assistant"):
+        with st.spinner("Thinking..."):
+            resp_data, err = api_request("POST", "/chat", payload=payload, timeout=120)
+
+        if err or not isinstance(resp_data, dict):
+            error_reply = f"Error: {err or 'Failed to generate response.'}"
+            st.error(error_reply)
+            st.session_state.messages.append({"role": "assistant", "content": error_reply})
+            return
+
+        answer = str(resp_data.get("response") or resp_data.get("answer") or "")
+        citations = list(resp_data.get("citations") or [])
+        assistant_msg = resp_data.get("assistant_message") or {}
+        message_id = assistant_msg.get("message_id") or resp_data.get("message_id")
+        trace_id = resp_data.get("trace_id")
+
+        if resp_data.get("session_id"):
+            st.session_state.session_id = resp_data["session_id"]
+
+        st.markdown(answer)
+        render_citations(citations)
+        assistant_entry: Dict[str, Any] = {
+            "role": "assistant",
+            "content": answer,
+            "citations": citations,
+            "message_id": message_id,
+            "trace_id": trace_id,
+        }
+        st.session_state.messages.append(assistant_entry)
+        render_assistant_footer(assistant_entry, len(st.session_state.messages) - 1)
+
+    refresh_conversations()
+    st.rerun()
+
+
+def main() -> None:
+    init_session_state()
+    inject_gemini_dark_css()
+
+    if not st.session_state.conversations:
+        refresh_conversations()
+
+    stream, year, subject_short = render_sidebar()
+    render_chat_workspace(stream, year, subject_short)
+
+    if not st.session_state.auth_user:
+        if st.session_state.active_auth_modal == "login":
+            show_login_dialog()
+        elif st.session_state.active_auth_modal == "signup":
+            show_signup_dialog()
+
+
+if __name__ == "__main__":
+    main()

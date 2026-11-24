@@ -56,6 +56,8 @@ def build_retriever(rows: Optional[List[Dict[str, Any]]] = None, db=None, force_
             page_content=r.get("question_text", ""),
             metadata={
                 "question_id": r.get("question_id", ""),
+                "paper_id": r.get("paper_id", ""),
+                "subject_id": r.get("subject_id", ""),
                 "subject": r.get("subject_short") or r.get("subject_code") or r.get("subject") or "RTU",
                 "subject_code": r.get("subject_code", ""),
                 "subject_name": r.get("subject", ""),
