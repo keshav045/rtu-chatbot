@@ -23,6 +23,20 @@ def is_ollama_online(base_url: str = "http://localhost:11434") -> bool:
     except Exception:
         return False
 
+def resolve_auto_providers(ollama_url: str = "http://localhost:11434"):
+    """Returns ordered candidate LangChain provider names available in the current environment."""
+    candidates = []
+    if os.getenv("OPENAI_API_KEY"):
+        candidates.append("openai")
+    if os.getenv("GROQ_API_KEY"):
+        candidates.append("groq")
+    if os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY"):
+        candidates.append("gemini")
+    if is_ollama_online(ollama_url):
+        candidates.append("ollama")
+    return candidates
+
+
 def get_llm_provider(
     provider_type: Optional[str] = None,
     model_name: Optional[str] = None,
@@ -34,6 +48,8 @@ def get_llm_provider(
     or automatic detection with graceful fallback to OfflineMentor.
     """
     choice = (provider_type or os.getenv("LLM_PROVIDER", "")).strip().lower()
+    if choice == "auto":
+        choice = ""
 
     if choice == "openai":
         return OpenAIProvider(api_key=api_key or os.getenv("OPENAI_API_KEY"), model=model_name or os.getenv("OPENAI_MODEL", "gpt-4o-mini"))

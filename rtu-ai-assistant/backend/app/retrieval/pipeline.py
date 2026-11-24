@@ -21,6 +21,7 @@ from .bm25_indexer import BM25Indexer
 from .reranker import CrossEncoderReranker
 from .hybrid_retriever import reciprocal_rank_fusion, apply_metadata_filters
 from .context_builder import ContextBuilder
+from .topic_verifier import TopicPaperVerifier
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
 INDEX_DIR = BACKEND_DIR / "data" / "indexes"
@@ -76,6 +77,7 @@ class RetrievalPipeline:
         self.bm25_indexer = BM25Indexer(index_dir)
         self.reranker = CrossEncoderReranker()
         self.context_builder = ContextBuilder(max_context_chars=4000)
+        self.topic_verifier = TopicPaperVerifier(index_dir=index_dir)
         self.doc_store: Dict[str, Dict[str, Any]] = {}
         self._is_loaded = False
         self._cache = _LRUCache(maxsize=200)
@@ -100,6 +102,7 @@ class RetrievalPipeline:
         print("[RetrievalPipeline] Building Sparse Keyword Index (BM25)...")
         self.bm25_indexer.build_index(documents)
 
+        self.topic_verifier.load(db, self.dense_indexer.model, force_rebuild=True)
         self._is_loaded = True
         print("[RetrievalPipeline] All indexes successfully built and persisted.")
 
@@ -112,8 +115,31 @@ class RetrievalPipeline:
 
         self.dense_indexer.load_index()
         self.bm25_indexer.load_index()
+        self.topic_verifier.load(db, self.dense_indexer.model)
         self._is_loaded = True
-        print(f"[RetrievalPipeline] Loaded indexes for {len(self.doc_store)} questions.")
+        print(f"[RetrievalPipeline] Loaded indexes for {len(self.doc_store)} questions and {len(self.topic_verifier.topics)} topics.")
+
+    def verify_and_retrieve(
+        self,
+        db: Session,
+        query: str,
+        target_subject: Optional[str] = None,
+        branch: Optional[str] = None,
+        year: Optional[int] = None,
+        filter_kwargs: Optional[Dict[str, Any]] = None,
+        top_k_questions: int = 8,
+    ) -> Dict[str, Any]:
+        """Tests query against RTU syllabus topics & papers and retrieves all related topics & questions."""
+        return self.topic_verifier.verify_and_retrieve(
+            db=db,
+            pipeline=self,
+            query=query,
+            target_subject=target_subject,
+            branch=branch,
+            year=year,
+            filter_kwargs=filter_kwargs,
+            top_k_questions=top_k_questions,
+        )
 
     # ------------------------------------------------------------------
     # Cache management

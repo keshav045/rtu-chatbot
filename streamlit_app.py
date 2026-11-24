@@ -927,21 +927,41 @@ def render_sidebar() -> Tuple[str, int, Optional[str]]:
     return stream, year, subject_short
 
 
-def render_citations(citations: List[Dict[str, Any]]) -> None:
-    """Renders compact collapsible past-paper source citations."""
-    if not citations:
+def render_citations(
+    citations: List[Dict[str, Any]],
+    related_topics: Optional[List[Dict[str, Any]]] = None,
+) -> None:
+    """Renders compact collapsible matched RTU syllabus topics and past-paper citations."""
+    related_topics = related_topics or []
+    total_items = len(citations) + len(related_topics)
+    if total_items == 0:
         return
-    with st.expander(f"Sources ({len(citations)})", expanded=False):
-        for cit in citations:
-            subj = cit.get("subject") or "RTU"
-            yr = cit.get("year") or ""
-            sec = cit.get("section") or ""
-            marks = cit.get("marks")
-            pdf = cit.get("source_pdf") or ""
-            page = cit.get("page_number")
-            meta_parts = [p for p in [subj, str(yr) if yr else "", sec, f"{marks}M" if marks else ""] if p]
-            location = f"{pdf} (p. {page})" if pdf and page else pdf
-            st.markdown(f"- **{' · '.join(meta_parts)}** — `{location}`" if location else f"- **{' · '.join(meta_parts)}**")
+    label_parts = []
+    if related_topics:
+        label_parts.append(f"{len(related_topics)} Topics")
+    if citations:
+        label_parts.append(f"{len(citations)} Papers")
+    with st.expander(f"Sources ({' · '.join(label_parts)})", expanded=False):
+        if related_topics:
+            st.markdown("**Related RTU Syllabus Topics:**")
+            for t in related_topics:
+                subj = t.get("subject") or "RTU"
+                unit_t = t.get("unit_title") or f"Unit {t.get('unit_no', '')}"
+                t_name = t.get("topic_name") or ""
+                st.markdown(f"- **{subj}** ({unit_t}) — {t_name}")
+        if citations:
+            if related_topics:
+                st.markdown("**Matched Past-Paper Questions:**")
+            for cit in citations:
+                subj = cit.get("subject") or "RTU"
+                yr = cit.get("year") or ""
+                sec = cit.get("section") or ""
+                marks = cit.get("marks")
+                pdf = cit.get("source_pdf") or ""
+                page = cit.get("page_number")
+                meta_parts = [p for p in [subj, str(yr) if yr else "", sec, f"{marks}M" if marks else ""] if p]
+                location = f"{pdf} (p. {page})" if pdf and page else pdf
+                st.markdown(f"- **{' · '.join(meta_parts)}** — `{location}`" if location else f"- **{' · '.join(meta_parts)}**")
 
 
 def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) -> None:
@@ -971,7 +991,7 @@ def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) 
             else:
                 with st.chat_message("assistant"):
                     st.markdown(content)
-                    render_citations(msg.get("citations") or [])
+                    render_citations(msg.get("citations") or [], msg.get("related_topics") or [])
                     render_assistant_footer(msg, idx)
 
     prompt = st.chat_input("Ask any RTU exam question...")
@@ -1008,6 +1028,7 @@ def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) 
 
         answer = str(resp_data.get("response") or resp_data.get("answer") or "")
         citations = list(resp_data.get("citations") or [])
+        related_topics = list(resp_data.get("related_topics") or [])
         assistant_msg = resp_data.get("assistant_message") or {}
         message_id = assistant_msg.get("message_id") or resp_data.get("message_id")
         trace_id = resp_data.get("trace_id")
@@ -1016,11 +1037,12 @@ def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) 
             st.session_state.session_id = resp_data["session_id"]
 
         st.markdown(answer)
-        render_citations(citations)
+        render_citations(citations, related_topics)
         assistant_entry: Dict[str, Any] = {
             "role": "assistant",
             "content": answer,
             "citations": citations,
+            "related_topics": related_topics,
             "message_id": message_id,
             "trace_id": trace_id,
         }

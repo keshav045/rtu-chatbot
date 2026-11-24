@@ -2,7 +2,35 @@
                       RTU AI ASSISTANT - COMMIT & CHANGE HISTORY
 ================================================================================
 
-Total Commits Recorded: 24 (Consolidated under commit message "latest")
+Total Commits Recorded: 25 (Latest commit message: "latest")
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 01:30:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - A	rtu-ai-assistant/backend/app/retrieval/topic_verifier.py
+   - A	rtu-ai-assistant/backend/scripts/seed_missing_syllabus_topics.py
+   - A	rtu-ai-assistant/backend/tests/test_topic_verification_retrieval.py
+   - M	rtu-ai-assistant/backend/app/retrieval/pipeline.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/core/config.py
+   - M	rtu-ai-assistant/backend/app/llm/llm_factory.py
+   - M	rtu-ai-assistant/backend/data/indexes/* (FAISS, BM25, LC-FAISS rebuilt)
+   - M	rtu-ai-assistant/backend/data/storage/rtu_metadata.db
+   - M	streamlit_app.py
+   - A	benchmark/results/rtu_benchmark_20261125_011758.json
+   - A	benchmark/results/rtu_benchmark_20261125_012736.json
+   - M	gemini.md
+   - M	history.txt
+4. Change Details   :
+   Implemented pre-generation RTU syllabus topic + past-paper query verification, expanded curriculum topic coverage across all 5 official RTU syllabus PDFs, added exhaustive related-topic retrieval, and fixed hallucination-prone default LLM configuration:
+   - Added scripts/seed_missing_syllabus_topics.py to parse all 5 official RTU syllabus PDFs (First Year + CS/IT + EC + EE + ME + CE) plus Wave Optics under PHY and supplementary CS units, growing rtu_metadata.db additively from 70 subjects / 180 topics -> 184 subjects / 1,182 topics and tagging 100 previously untagged past questions, then rebuilt FAISS, BM25, and LC-FAISS indexes (1,493 searchable questions).
+   - Built TopicPaperVerifier (topic_verifier.py) with persistent topic_embeddings.npz BGE cache + CrossEncoder + word-boundary alias matching; wired RetrievalPipeline.verify_and_retrieve() into ChatService.process_turn() so every EXAM_QUESTION (including unindexed subjects like OS, AI, CN, PHY) is verified against RTU topics & papers first and pulls all related topics + topic-linked past questions when in-syllabus.
+   - Updated config.py, llm_factory.py (resolve_auto_providers), .env, and chat_service.py to support DEFAULT_LLM_PROVIDER="auto" (OpenAI -> Groq -> Gemini -> Ollama qwen2.5:1.5b -> OfflineMentor fallback) and removed boilerplate rubric headers from generation prompts.
+   - Updated streamlit_app.py render_citations() to render both matched related_topics and past-paper citations inside the collapsible Sources expander.
+5. Cascading Impacts:
+   - Screening & Grounding: Eliminated the unindexed-subject bypass (e.g. non-academic pasta prompt under OS now returns is_in_syllabus=False with 0 citations).
+   - Tests & Benchmark: 18/18 calibration checks passed; pytest 43/43 passed (adding test_topic_verification_retrieval.py); eval_application.py 4/4 PASS; verify_all_fixes.py 6/6 PASS; verify_ui_e2e.py ALL_GEMINI_DARK_UI_E2E_CHECKS_PASSED; rtu_benchmark.py template_phrase_hits dropped 6 -> 0 and pass rate rose from 5/12 (42%) to 9/12 (first live run) / 8/12 (latest run with stricter technical prompt; remaining Q01/Q02/Q03 failed strict literal rubric tokens 'm-1', '|xy| <= p', 'superkey', while Q05 missed O(V+E)).
 
 --------------------------------------------------------------------------------
 1. Date & Timestamp : 2026-11-25 00:26:00 +0530

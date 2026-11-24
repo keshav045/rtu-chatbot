@@ -55,17 +55,18 @@ This document provides complete technical documentation for all primary scripts,
 
 ## 3. Unified Retrieval Pipeline & LC Retriever
 
-- **Script Path & File Name**: `rtu-ai-assistant/backend/app/retrieval/pipeline.py` (paired with `lc_retriever.py`, `dense_indexer.py`, `bm25_indexer.py`, `reranker.py`, `hybrid_retriever.py`, `context_builder.py`)
+- **Script Path & File Name**: `rtu-ai-assistant/backend/app/retrieval/pipeline.py` (paired with `topic_verifier.py`, `lc_retriever.py`, `dense_indexer.py`, `bm25_indexer.py`, `reranker.py`, `hybrid_retriever.py`, `context_builder.py`)
 - **Core Purpose & Role**:
-  Executes hybrid retrieval combining dense vector search (`FAISS` + `BAAI/bge-small-en-v1.5`, with 1.25x subject score boost when `subject` and `id_mapping_meta` are passed) and sparse keyword matching (`BM25Okapi`), filters by academic metadata (`subject`, `semester`, `year_from`, `year_to`, `section`, `marks`), fuses rankings via Reciprocal Rank Fusion (`k=60`), reranks candidates via `cross-encoder/ms-marco-MiniLM-L-6-v2` with MMR diversification, and caches responses in an LRU cache (`maxsize=200`).
+  Executes hybrid retrieval combining dense vector search (`FAISS` + `BAAI/bge-small-en-v1.5`, with 1.25x subject score boost when `subject` and `id_mapping_meta` are passed) and sparse keyword matching (`BM25Okapi`), filters by academic metadata (`subject`, `semester`, `year_from`, `year_to`, `section`, `marks`), fuses rankings via Reciprocal Rank Fusion (`k=60`), reranks candidates via `cross-encoder/ms-marco-MiniLM-L-6-v2` with MMR diversification, and caches responses in an LRU cache (`maxsize=200`). Paired `TopicPaperVerifier` (`topic_verifier.py`) embeds and caches all `1,182` RTU syllabus `Topic` rows (`topic_embeddings.npz`) to verify query-to-RTU relevance before generation (even for subjects with 0 extracted past-paper questions) and retrieve all closely related syllabus topics + topic-linked questions.
 - **Execution Command & Runtime Environment**:
-  - Invoked via `RetrievalPipeline.retrieve(query, subject, semester, year_from, year_to, section, marks, top_k=5)` or via `build_retriever(db)` in `lc_retriever.py`.
+  - Invoked via `RetrievalPipeline.retrieve(...)`, `RetrievalPipeline.verify_and_retrieve(...)`, or via `build_retriever(db)` in `lc_retriever.py`.
   - Runtime: PyTorch, SentenceTransformers, Rank-BM25, FAISS, LangChain.
 - **Key Inputs & Configuration Parameters**:
   - `query`, `subject`, `semester`, `year_from`, `year_to`, `section`, `marks`, `top_k=5`, `rerank_candidates_k=12`.
   - LRU cache key: `(query_normalized, subject, semester, year_from, year_to, section, marks, top_k)`.
 - **Outputs & Side Effects**:
-  - Returns `results` (with CrossEncoder `rerank_score`), `citations` (with `subject_short`, `subject_code`, `paper_id`, `year`, `source_pdf`, `page_number`), `context_string`, and `retrieval_stats` (`cache_hit`, `cache_size`).
+  - `retrieve()` returns `results` (with CrossEncoder `rerank_score`), `citations`, `context_string`, and `retrieval_stats`.
+  - `verify_and_retrieve()` returns `is_rtu_related`, `related_topics`, `questions`, `citations`, and `topic_eval` diagnostics.
 - **End-to-End Operational Use Case**:
   Called directly by `/api/search` and `ChatService` (directly for filtered queries and as CrossEncoder rescorer/fallback alongside `lc_retriever`).
 
@@ -75,15 +76,15 @@ This document provides complete technical documentation for all primary scripts,
 
 - **Script Path & File Name**: `rtu-ai-assistant/backend/app/services/chat_service.py`
 - **Core Purpose & Role**:
-  Central RAG and exam coaching orchestrator. Handles session resolution with user upsert (`_ensure_user_exists`), multi-turn history & query rewriting (`QueryRewriter`), security & syllabus screening (`AcademicScreeningService`), intent dispatch (`STUDY_PLAN`, `TOPIC_IMPORTANCE`, `PAST_YEAR_QUESTIONS`, `QUIZ_REQUEST`, `SUBJECT_SELECT`, `OUT_OF_SYLLABUS`, `EXAM_QUESTION`), follow-up-aware subject resolution, long-term student memory injection & interaction recording (`MemoryService`), hybrid retrieval with strict subject isolation, dual relevance/citation thresholds (`OUT_OF_SCOPE_THRESHOLD=-9.5`, `CITATION_RELEVANCE_THRESHOLD=-6.0`), LLM synthesis (`rtu-senior` / Ollama / Groq / Gemini / OpenAI / OfflineMentor), anti-leakage post-sanitization, and LangSmith tracing.
+  Central RAG and exam coaching orchestrator. Handles session resolution with user upsert (`_ensure_user_exists`), multi-turn history & query rewriting (`QueryRewriter`), security & syllabus screening (`AcademicScreeningService`), intent dispatch (`STUDY_PLAN`, `TOPIC_IMPORTANCE`, `PAST_YEAR_QUESTIONS`, `QUIZ_REQUEST`, `SUBJECT_SELECT`, `OUT_OF_SYLLABUS`, `EXAM_QUESTION`), pre-generation RTU topic & past-paper verification (`pipeline.verify_and_retrieve()`, rejecting off-topic queries even on unindexed subjects like `OS`/`PHY`), exhaustive related-topic & topic-linked question retrieval, long-term student memory injection (`MemoryService`), mark-aware anti-boilerplate LLM synthesis using `DEFAULT_LLM_PROVIDER="auto"` fallback (`resolve_auto_providers`: `openai` -> `groq` -> `gemini` -> `ollama` `qwen2.5:1.5b` -> `offline`), anti-leakage post-sanitization, and LangSmith tracing.
 - **Execution Command & Runtime Environment**:
   - Invoked via `ChatService.process_turn(...)` or `ChatService.chat(...)`.
   - Runtime: FastAPI backend dependency.
 - **Key Inputs & Configuration Parameters**:
   - `db`, `user_message`, `session_id`, `provider_name`, `filters`, `top_k`, `language_pref`, `mode`, `user_id`, `branch`, `year`.
-  - Subject-count check: flags `is_unindexed_subject=True` whenever `target_subject` has 0 papers OR 0 approved questions (e.g., `OS` with 22 papers and 0 extracted questions).
+  - Subject-count check: flags `is_unindexed_subject=True` when `target_subject` has 0 papers OR 0 approved questions (e.g., `OS`), still running syllabus-topic verification via `TopicPaperVerifier` rather than skipping screening.
 - **Outputs & Side Effects**:
-  - Persists `User` (if unknown `user_id`), `SessionModel` (updating `updated_at` on each turn so active conversations sort first in `/api/conversations`), `Message` (`user` + `assistant`), `Citation`, and updates `StudentMemory`/`TopicMastery` in SQLite; emits LangSmith traces.
+  - Persists `User` (if unknown `user_id`), `SessionModel` (updating `updated_at` on each turn so active conversations sort first in `/api/conversations`), `Message` (`user` + `assistant`), `Citation`, and updates `StudentMemory`/`TopicMastery` in SQLite; returns `related_topics` and `topic_verification` alongside `citations`; emits LangSmith traces.
 - **End-to-End Operational Use Case**:
   Processes all conversational turns from Streamlit, `/api/chat`, benchmarks, and evaluation scripts while blocking prompt injection, off-topic queries, and cross-subject citation leaks.
 
@@ -230,13 +231,13 @@ This document provides complete technical documentation for all primary scripts,
 
 ## 13. Automated Test Suite
 
-- **Script Path & File Name**: `rtu-ai-assistant/backend/tests/` (`test_phase1_ingestion.py`, `test_phase2_retrieval.py`, `test_phase3_api.py`, `test_phase5_security_and_regression.py`, `test_screening_and_langsmith.py`, `test_v2_features.py`, `test_student_long_term_memory_e2e.py`, `test_feedback_tracking.py`, and CLI smoke script `verify_all_fixes.py`)
+- **Script Path & File Name**: `rtu-ai-assistant/backend/tests/` (`test_phase1_ingestion.py`, `test_phase2_retrieval.py`, `test_phase3_api.py`, `test_phase5_security_and_regression.py`, `test_screening_and_langsmith.py`, `test_v2_features.py`, `test_student_long_term_memory_e2e.py`, `test_feedback_tracking.py`, `test_topic_verification_retrieval.py`, and CLI smoke script `verify_all_fixes.py`)
 - **Core Purpose & Role**:
-  Validates database integrity, ingestion manifest, FAISS/BM25/CrossEncoder retrieval, API contracts, security guardrails, LangSmith screening, student long-term memory, and Answer Correctness feedback tracking.
+  Validates database integrity, ingestion manifest, FAISS/BM25/CrossEncoder retrieval, RTU topic-paper query verification, API contracts, security guardrails, LangSmith screening, student long-term memory, and Answer Correctness feedback tracking.
 - **Execution Command & Runtime Environment**:
-  - Full Pytest Suite: `python -m pytest -o pythonpath=backend backend/tests -v` (executed from `rtu-ai-assistant/`, `41 passed`)
+  - Full Pytest Suite: `python -m pytest -o pythonpath=backend backend/tests -v` (executed from `rtu-ai-assistant/`, `43 passed`)
   - Application Eval: `python rtu-ai-assistant/evaluation/eval_application.py` (`4/4 PASS`)
-  - Live Smoke Script: `python rtu-ai-assistant/backend/tests/verify_all_fixes.py` (with server running on `:8000`)
+  - Live Smoke Script: `python rtu-ai-assistant/backend/tests/verify_all_fixes.py` (with server running on `:8000`, `6/6 PASS`)
 - **Key Inputs & Configuration Parameters**:
   - Uses local `rtu_metadata.db`, built indexes under `backend/data/indexes/`, and isolated `:memory:` SQLite for `test_student_long_term_memory_e2e.py`.
 - **Outputs & Side Effects**:

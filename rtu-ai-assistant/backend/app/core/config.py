@@ -48,10 +48,10 @@ class Settings(BaseSettings):
     CITATION_RELEVANCE_THRESHOLD: float = -6.0
 
     # LLM Settings
-    DEFAULT_LLM_PROVIDER: str = "ollama"  # 'ollama', 'groq', 'gemini', 'openai', 'offline'
+    DEFAULT_LLM_PROVIDER: str = "auto"  # 'auto', 'openai', 'groq', 'gemini', 'ollama', 'offline'
     OLLAMA_BASE_URL: str = "http://localhost:11434"
-    # Specialized RTU Senior Tutor fine-tuned on 748 authentic exam examples across Semesters 3-8
-    OLLAMA_MODEL: str = "rtu-senior"
+    # Clean base Instruct model for offline local fallback when cloud API keys are absent
+    OLLAMA_MODEL: str = "qwen2.5:1.5b"
     # num_ctx 4096: GTX 1650 (4 GB VRAM) handles rtu-senior at 4096 comfortably (~1.6 GB).
     OLLAMA_NUM_CTX: int = 4096
     GROQ_MODEL: str = "llama-3.3-70b-versatile"
