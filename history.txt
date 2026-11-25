@@ -2,11 +2,26 @@
                       RTU AI ASSISTANT - COMMIT & CHANGE HISTORY
 ================================================================================
 
-Total Commits Recorded: 27 (Latest commit message: "latest")
+Total Commits Recorded: 28 (Latest commit message: "latest")
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 15:54:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	app.py
+   - M	rtu-ai-assistant/backend/app/retrieval/lc_retriever.py
+   - M	gemini.md
+   - M	history.txt
+4. Change Details   :
+   Fixed HF Spaces zero-a10g startup error ('No @spaces.GPU function detected during startup') while keeping all retrieval/reranker PyTorch models pinned to CPU:
+   - lc_retriever.py: Added explicit `model_kwargs={"device": "cpu"}` to HuggingFaceEmbeddings and HuggingFaceCrossEncoder.
+   - app.py: Registered a lightweight `@spaces.GPU(duration=5) def _zerogpu_probe()` for HF ZeroGPU runtime validation, eager-loaded `pipeline.reranker._load_model()` on CPU at startup, and removed `CUDA_VISIBLE_DEVICES=""` so `spaces` startup passes without intercepting CPU retrieval models.
+5. Cascading Impacts:
+   - Cloud Space Runtime: Satisfies `zero-a10g` ZeroGPU startup check while eliminating `torch._C._cuda_init` errors during `/api/chat`.
 
 --------------------------------------------------------------------------------
 1. Date & Timestamp : 2026-11-25 15:36:00 +0530
-2. Commit Hash      : UNCOMMITTED (Working Tree)
+2. Commit Hash      : d39ee8a
 3. Files Changed    :
    - M	app.py
    - M	rtu-ai-assistant/backend/app/retrieval/dense_indexer.py

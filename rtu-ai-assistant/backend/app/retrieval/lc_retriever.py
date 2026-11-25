@@ -74,8 +74,11 @@ def build_retriever(rows: Optional[List[Dict[str, Any]]] = None, db=None, force_
         if r.get("question_text", "").strip()
     ]
 
-    # Initialize Embedding Model
-    emb = HuggingFaceEmbeddings(model_name=settings.EMBEDDING_MODEL)
+    # Initialize Embedding Model explicitly on CPU (safe under HF ZeroGPU proxies)
+    emb = HuggingFaceEmbeddings(
+        model_name=settings.EMBEDDING_MODEL,
+        model_kwargs={"device": "cpu"},
+    )
 
     # Persistent FAISS vector store
     lc_faiss_dir = settings.INDEXES_DIR / "lc_faiss"
@@ -104,8 +107,11 @@ def build_retriever(rows: Optional[List[Dict[str, Any]]] = None, db=None, force_
         weights=[0.5, 0.5]
     )
 
-    # Cross-Encoder Reranker Compressor
-    cross_encoder = HuggingFaceCrossEncoder(model_name=settings.RERANKER_MODEL)
+    # Cross-Encoder Reranker Compressor explicitly on CPU
+    cross_encoder = HuggingFaceCrossEncoder(
+        model_name=settings.RERANKER_MODEL,
+        model_kwargs={"device": "cpu"},
+    )
     reranker = CrossEncoderReranker(
         model=cross_encoder,
         top_n=settings.FINAL_TOP_K

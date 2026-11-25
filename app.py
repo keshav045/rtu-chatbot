@@ -12,16 +12,24 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 
-# Keep PyTorch inference strictly on CPU so ZeroGPU CUDA proxies never intercept BGE/CrossEncoder tensors
-os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
-
 # --- Ensure backend package resolution ---
 BASE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = BASE_DIR / "rtu-ai-assistant" / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-HAS_ZEROGPU = False
+# ZeroGPU registration required on HF Spaces zero-a10g hardware (all RAG models stay explicitly on CPU)
+try:
+    import spaces
+    HAS_ZEROGPU = True
+except ImportError:
+    spaces = None
+    HAS_ZEROGPU = False
+
+if HAS_ZEROGPU:
+    @spaces.GPU(duration=5)
+    def _zerogpu_probe() -> bool:
+        return True
 
 import gradio as gr
 import pandas as pd
@@ -50,6 +58,7 @@ startup_db = SessionLocal()
 try:
     pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
     pipeline.load_indexes(startup_db)
+    pipeline.reranker._load_model()
     lc_retriever = build_retriever(db=startup_db)
 finally:
     startup_db.close()
