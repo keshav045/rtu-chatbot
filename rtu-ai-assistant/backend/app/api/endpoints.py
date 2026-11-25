@@ -11,6 +11,7 @@ Comprehensive implementation of Section 10 of Implementation Plan Version 2:
 """
 
 import logging
+import json
 import uuid
 import hashlib
 import hmac
@@ -18,12 +19,12 @@ from typing import List, Dict, Any, Optional
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, UploadFile, File, Form
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database.session import get_db
+from app.database.session import SessionLocal, get_db
 from app.database.models import (
     Paper, Question, Subject, Unit, Topic, SessionModel, Message,
     Citation, Upload, Feedback, QuizAttempt, Branch, SubjectOffering, User,
@@ -848,6 +849,52 @@ def chat(request: ChatRequest, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Chat generation failed: {e}", exc_info=True)
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Chat generation failed: {str(e)}")
+
+
+@router.post("/chat/stream", tags=["Conversational RAG"], summary="Streaming Senior Tutor RAG Chat (SSE)")
+def chat_stream(request: ChatRequest):
+    """
+    Streams a Senior Tutor conversational turn as Server-Sent Events (text/event-stream).
+    Events emitted: `meta`, `token`, optional `replace` (post-sanitization), `done`, or `error`.
+    """
+    if not _chat_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Chat service not initialized")
+
+    filters_dict = request.filters.dict(exclude_none=True) if request.filters else {}
+
+    def _event_generator():
+        stream_db = SessionLocal()
+        try:
+            for event in _chat_service.stream_turn(
+                db=stream_db,
+                user_message=request.message,
+                session_id=request.session_id or request.conversation_id,
+                conversation_id=request.conversation_id,
+                provider_name=request.provider,
+                filters=filters_dict,
+                top_k=request.top_k,
+                language_pref=request.language,
+                mode=request.mode,
+                user_id=request.user_id,
+                branch=request.branch or filters_dict.get("branch"),
+                year=request.year or filters_dict.get("year"),
+            ):
+                yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.error(f"Streaming chat generation failed: {e}", exc_info=True)
+            yield f"data: {json.dumps({'type': 'error', 'detail': str(e)})}\n\n"
+        finally:
+            stream_db.close()
+
+    return StreamingResponse(
+        _event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 # --- Direct Hybrid Search Endpoint ---
 

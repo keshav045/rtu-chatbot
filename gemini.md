@@ -46,6 +46,7 @@ This document provides complete technical documentation for all primary scripts,
   - Student auth modal credentials (`roll_no`, `email`, `name`, `branch`, `year`, `password`), sidebar selectors (`Stream`, `Year`, dynamically filtered `Subject` via `GET /api/subjects?branch=...&year=...` with `FALLBACK_SUBJECTS`), chat input (`st.chat_input`), and `👍` / `👎` votes.
 - **Outputs & Side Effects**:
   - Generates an isolated session `guest_user_id` before login and switches to authenticated `user_id` via `/api/auth/login` or `/api/auth/register` (resolving 4xx validation/auth errors and nested `error.message` payloads cleanly via `_extract_error_detail()`, while `api_request()` rejects unexpected `text/html` proxy pages cleanly).
+  - Streams assistant responses live token-by-token via `POST /api/chat/stream` (`_iter_chat_sse`, updating an in-place markdown placeholder with `▌` cursor and falling back cleanly to `POST /api/chat`).
   - Scopes conversations and chat requests by `active_user_id()` (`GET /api/conversations?user_id=...`, `GET /api/conversations/{id}`, `DELETE /api/conversations/{id}`, `DELETE /api/conversations?user_id=...`) and sends top-level `branch`, `year`, `user_id`, and optional `filters.subject` to `POST /api/chat`.
   - Records inline correctness feedback via `POST /api/feedback`.
 - **End-to-End Operational Use Case**:
@@ -78,7 +79,7 @@ This document provides complete technical documentation for all primary scripts,
 - **Core Purpose & Role**:
   Central RAG and exam coaching orchestrator. Handles session resolution with user upsert (`_ensure_user_exists`), multi-turn history & query rewriting (`QueryRewriter`), security & syllabus screening (`AcademicScreeningService`), intent dispatch (`STUDY_PLAN`, `TOPIC_IMPORTANCE`, `PAST_YEAR_QUESTIONS`, `QUIZ_REQUEST`, `SUBJECT_SELECT`, `OUT_OF_SYLLABUS`, `EXAM_QUESTION`), pre-generation RTU topic & past-paper verification (`pipeline.verify_and_retrieve()`, rejecting off-topic queries even on unindexed subjects like `OS`/`PHY`), exhaustive related-topic & topic-linked question retrieval, long-term student memory injection (`MemoryService`), mark-aware anti-boilerplate LLM synthesis using `DEFAULT_LLM_PROVIDER="auto"` fallback (`resolve_auto_providers`: `openai` -> `groq` -> `gemini` -> `ollama` `qwen2.5:1.5b` -> `offline`), anti-leakage post-sanitization, and LangSmith tracing.
 - **Execution Command & Runtime Environment**:
-  - Invoked via `ChatService.process_turn(...)` or `ChatService.chat(...)`.
+  - Invoked via `ChatService.process_turn(...)`, `ChatService.stream_turn(...)` (for SSE token streaming), or `ChatService.chat(...)`.
   - Runtime: FastAPI backend dependency.
 - **Key Inputs & Configuration Parameters**:
   - `db`, `user_message`, `session_id`, `provider_name`, `filters`, `top_k`, `language_pref`, `mode`, `user_id`, `branch`, `year`.
@@ -178,7 +179,7 @@ This document provides complete technical documentation for all primary scripts,
 
 - **Script Path & File Name**: `rtu-ai-assistant/backend/app/api/endpoints.py`
 - **Core Purpose & Role**:
-  Exposes all HTTP API contracts: sessions, chat, hybrid search, important topics, crash study planner, quiz workflow, crowdsourced PDF uploads/review queue, paper catalog & PDF streaming, student auth (`/api/auth/register` resolves branch codes like `"CSE"` -> `Branch.id` `"BRANCH_CSE"`), analytics, observability, and the **Feedback & Answer Correctness Tracker** (`/api/feedback`).
+  Exposes all HTTP API contracts: sessions, synchronous & SSE streaming chat (`/api/chat`, `/api/chat/stream`), hybrid search, important topics, crash study planner, quiz workflow, crowdsourced PDF uploads/review queue, paper catalog & PDF streaming, student auth (`/api/auth/register` resolves branch codes like `"CSE"` -> `Branch.id` `"BRANCH_CSE"`), student long-term memory (`/api/memory*`), analytics, observability, and the **Feedback & Answer Correctness Tracker** (`/api/feedback`).
 - **Execution Command & Runtime Environment**:
   - Mounted under `/api` by `app/main.py`.
 - **Key Inputs & Configuration Parameters**:
@@ -232,7 +233,7 @@ This document provides complete technical documentation for all primary scripts,
 
 ## 13. Automated Test Suite
 
-- **Script Path & File Name**: `rtu-ai-assistant/backend/tests/` (`test_phase1_ingestion.py`, `test_phase2_retrieval.py`, `test_phase3_api.py`, `test_phase5_security_and_regression.py`, `test_screening_and_langsmith.py`, `test_v2_features.py`, `test_student_long_term_memory_e2e.py`, `test_feedback_tracking.py`, `test_topic_verification_retrieval.py`, and CLI smoke script `verify_all_fixes.py`)
+- **Script Path & File Name**: `rtu-ai-assistant/backend/tests/` (`test_phase1_ingestion.py`, `test_phase2_retrieval.py`, `test_phase3_api.py`, `test_phase5_security_and_regression.py`, `test_screening_and_langsmith.py`, `test_v2_features.py`, `test_student_long_term_memory_e2e.py`, `test_feedback_tracking.py`, `test_topic_verification_retrieval.py`, `test_streaming_chat.py`, and CLI smoke script `verify_all_fixes.py`)
 - **Core Purpose & Role**:
   Validates database integrity, ingestion manifest, FAISS/BM25/CrossEncoder retrieval, RTU topic-paper query verification, API contracts, security guardrails, LangSmith screening, student long-term memory, and Answer Correctness feedback tracking.
 - **Execution Command & Runtime Environment**:

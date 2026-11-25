@@ -2,11 +2,31 @@
                       RTU AI ASSISTANT - COMMIT & CHANGE HISTORY
 ================================================================================
 
-Total Commits Recorded: 28 (Latest commit message: "latest")
+Total Commits Recorded: 29 (Latest commit message: "latest")
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 16:08:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/api/endpoints.py
+   - M	streamlit_app.py
+   - A	rtu-ai-assistant/backend/tests/test_streaming_chat.py
+   - M	gemini.md
+   - M	history.txt
+4. Change Details   :
+   Implemented end-to-end token streaming across ChatService, FastAPI SSE endpoint, and Streamlit UI:
+   - chat_service.py: Factored shared `_prepare_turn()` and `_finalize_turn()` helpers and added `ChatService.stream_turn()`, streaming live LangChain `chain.stream()` tokens across `resolve_auto_providers()` fallbacks with leading role-prefix cleanup, emoji stripping, unindexed-subject prefix handling, and identical post-generation screening/persistence/memory/LangSmith behavior.
+   - endpoints.py: Added `POST /api/chat/stream` returning `StreamingResponse` (`text/event-stream` SSE events: `meta`, `token`, optional `replace`, `done`, `error`) using a dedicated `SessionLocal()` session per stream lifecycle.
+   - streamlit_app.py: Added `_iter_chat_sse()` client and live token rendering (`▌` streaming markdown placeholder) inside `render_chat_workspace()`, preserving `"Thinking..."` until the first streamed chunk arrives and falling back gracefully to `POST /api/chat` on non-streaming servers.
+   - test_streaming_chat.py: Added end-to-end SSE and mocked LangChain streaming tests.
+5. Cascading Impacts:
+   - API Contracts: Non-breaking addition of `POST /api/chat/stream`; `POST /api/chat` contract remains identical via shared `_prepare_turn()` / `_finalize_turn()`.
+   - UI & Cloud Space: Streaming route is automatically mounted on both local `:8000` and Hugging Face Space (`/api/chat/stream`).
 
 --------------------------------------------------------------------------------
 1. Date & Timestamp : 2026-11-25 15:54:00 +0530
-2. Commit Hash      : UNCOMMITTED (Working Tree)
+2. Commit Hash      : e98f388
 3. Files Changed    :
    - M	app.py
    - M	rtu-ai-assistant/backend/app/retrieval/lc_retriever.py

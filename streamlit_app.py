@@ -2,7 +2,7 @@ import html
 import json
 import os
 import uuid
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
 import requests
 import streamlit as st
@@ -166,6 +166,36 @@ def api_request(
         if "text/html" in ctype or resp.text.lstrip().lower().startswith("<!doctype"):
             return None, f"Backend at {DEFAULT_BACKEND_URL} returned HTML instead of JSON for /api{endpoint}."
         return {"raw": resp.text}, None
+
+
+def _iter_chat_sse(payload: Dict[str, Any], timeout: int = 120) -> Iterator[Dict[str, Any]]:
+    """Streams parsed Server-Sent Events from POST /api/chat/stream."""
+    url = f"{DEFAULT_BACKEND_URL}/api/chat/stream"
+    with requests.post(
+        url,
+        json=payload,
+        stream=True,
+        timeout=timeout,
+        headers={"Accept": "text/event-stream"},
+    ) as resp:
+        if resp.status_code >= 400:
+            raise RuntimeError(_extract_error_detail(resp))
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if "text/html" in ctype:
+            raise RuntimeError("HTML response received from /api/chat/stream")
+        for raw_line in resp.iter_lines(decode_unicode=True):
+            if not raw_line:
+                continue
+            line = raw_line.strip()
+            if not line.startswith("data:"):
+                continue
+            data_str = line[5:].strip()
+            if not data_str:
+                continue
+            try:
+                yield json.loads(data_str)
+            except ValueError:
+                continue
 
 
 # --- Session State & Curriculum Helpers ---
@@ -1025,16 +1055,67 @@ def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) 
         payload["filters"] = {"subject": subject_short}
 
     with st.chat_message("assistant"):
-        with st.spinner("Thinking..."):
-            resp_data, err = api_request("POST", "/chat", payload=payload, timeout=120)
+        stream_box = st.empty()
+        streamed_text = ""
+        resp_data: Optional[Dict[str, Any]] = None
+        err: Optional[str] = None
+        got_first_event = False
+
+        try:
+            with st.spinner("Thinking..."):
+                sse_iter = _iter_chat_sse(payload, timeout=120)
+                for event in sse_iter:
+                    etype = event.get("type")
+                    if etype == "meta":
+                        continue
+                    if etype == "token":
+                        got_first_event = True
+                        streamed_text += str(event.get("content") or "")
+                        stream_box.markdown(streamed_text + " ▌")
+                        break
+                    if etype == "replace":
+                        got_first_event = True
+                        streamed_text = str(event.get("content") or "")
+                        stream_box.markdown(streamed_text + " ▌")
+                        break
+                    if etype == "done":
+                        got_first_event = True
+                        resp_data = event
+                        break
+                    if etype == "error":
+                        err = str(event.get("detail") or "Streaming generation failed.")
+                        break
+
+            if got_first_event and resp_data is None and err is None:
+                for event in sse_iter:
+                    etype = event.get("type")
+                    if etype == "token":
+                        streamed_text += str(event.get("content") or "")
+                        stream_box.markdown(streamed_text + " ▌")
+                    elif etype == "replace":
+                        streamed_text = str(event.get("content") or "")
+                        stream_box.markdown(streamed_text + " ▌")
+                    elif etype == "done":
+                        resp_data = event
+                        break
+                    elif etype == "error":
+                        err = str(event.get("detail") or "Streaming generation failed.")
+                        break
+        except Exception:
+            if not got_first_event:
+                with st.spinner("Thinking..."):
+                    resp_data, err = api_request("POST", "/chat", payload=payload, timeout=120)
+            else:
+                err = "Streaming connection interrupted before completion."
 
         if err or not isinstance(resp_data, dict):
+            stream_box.empty()
             error_reply = f"Error: {err or 'Failed to generate response.'}"
             st.error(error_reply)
             st.session_state.messages.append({"role": "assistant", "content": error_reply})
             return
 
-        answer = str(resp_data.get("response") or resp_data.get("answer") or "")
+        answer = str(resp_data.get("response") or resp_data.get("answer") or streamed_text or "")
         citations = list(resp_data.get("citations") or [])
         related_topics = list(resp_data.get("related_topics") or [])
         assistant_msg = resp_data.get("assistant_message") or {}
@@ -1044,7 +1125,7 @@ def render_chat_workspace(stream: str, year: int, subject_short: Optional[str]) 
         if resp_data.get("session_id"):
             st.session_state.session_id = resp_data["session_id"]
 
-        st.markdown(answer)
+        stream_box.markdown(answer)
         render_citations(citations, related_topics)
         assistant_entry: Dict[str, Any] = {
             "role": "assistant",

@@ -9,7 +9,7 @@ import time
 import uuid
 import logging
 from datetime import datetime
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Iterator
 from sqlalchemy.orm import Session
 
 logger = logging.getLogger("rtu.chat_service")
@@ -274,13 +274,12 @@ class ChatService:
             ))
             db.flush()
 
-    def process_turn(
+    def _prepare_turn(
         self,
         db: Session,
         user_message: str,
         session_id: Optional[str] = None,
-        conversation_id: Optional[str] = None,  # Backward compatibility
-        provider_name: Optional[str] = None,
+        conversation_id: Optional[str] = None,
         filters: Optional[Dict[str, Any]] = None,
         top_k: int = 5,
         language_pref: Optional[str] = None,
@@ -289,15 +288,7 @@ class ChatService:
         branch: Optional[str] = None,
         year: Optional[int] = None,
     ) -> Dict[str, Any]:
-        """
-        Executes a complete Conversational RAG turn:
-        1. Resolve or create student session
-        2. Extract chat history for contextual memory
-        3. Contextual query rewriting
-        4. Hybrid retrieval + reranking
-        5. Grounded synthesis via Senior Tutor prompt
-        6. Persist interaction & citations
-        """
+        """Resolves session, runs screening/intent/topic verification, and prepares synthesis inputs."""
         actual_session_id = session_id or conversation_id
         session_obj = None
         start = time.perf_counter()
@@ -426,6 +417,12 @@ class ChatService:
         )
         related_topics: List[Dict[str, Any]] = []
         topic_verification: Dict[str, Any] = {}
+        tv_res: Dict[str, Any] = {}
+        assistant_reply = ""
+        context_string = ""
+        system_prompt = SENIOR_TUTOR_SYSTEM_PROMPT
+        is_unindexed_subject = False
+        full_subj_name = target_subject or "Engineering Subject"
         input_screening = AcademicScreeningService.screen_input(user_message, active_subject=target_subject)
         if not input_screening.is_safe:
             intent = IntentType.SECURITY_VIOLATION
@@ -1055,110 +1052,106 @@ class ChatService:
                     )
 
                 system_prompt = SENIOR_TUTOR_SYSTEM_PROMPT
-                if is_unindexed_subject and not retrieved_questions:
-                    system_prompt += (
-                        f"\nImportant Context: Past paper questions for {target_subject} ({full_subj_name}) are still being compiled, "
-                        f"so rely on the matched RTU syllabus topics above and standard textbook fundamentals without fabricating paper citations."
-                    )
-                if session_obj:
-                    system_prompt += (
-                        f"\nStudent Context: Year {session_obj.year or 2}, {session_obj.branch or 'CSE'}. "
-                        f"Target Subject: {target_subject or 'General RTU Curriculum'}."
-                    )
-                try:
-                    eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
-                    student_mem_ctx = MemoryService.get_student_memory_context(db, user_id=eff_user_id, target_subject=target_subject)
-                    if student_mem_ctx.get("prompt_block"):
-                        system_prompt += f"\n\n{student_mem_ctx['prompt_block']}"
-                except Exception as mem_err:
-                    logger.debug(f"Memory prompt injection skipped: {mem_err}")
-                if language_pref == "hinglish":
-                    system_prompt += "\nPreferred Language: Reply in friendly, clear Hinglish (Hindi written in Roman script)."
-                elif language_pref == "english":
-                    system_prompt += "\nPreferred Language: Reply in professional, clear academic English."
+        is_rejected_turn = (
+            not input_screening.is_safe
+            or not input_screening.is_in_syllabus
+            or intent in (IntentType.SECURITY_VIOLATION, IntentType.OUT_OF_SYLLABUS)
+        )
+        requires_llm = bool(
+            intent == IntentType.EXAM_QUESTION
+            and tv_res.get("is_rtu_related", False)
+        )
+        return {
+            "start": start,
+            "trace_id": trace_id,
+            "actual_session_id": actual_session_id,
+            "session_obj": session_obj,
+            "user_message": user_message,
+            "history_dicts": history_dicts,
+            "intent": intent,
+            "target_subject": target_subject,
+            "rewritten_query": rewritten_query,
+            "input_screening": input_screening,
+            "is_rejected_turn": is_rejected_turn,
+            "requires_llm": requires_llm,
+            "static_reply": "" if requires_llm else assistant_reply,
+            "context_string": context_string,
+            "system_prompt": system_prompt,
+            "is_unindexed_subject": is_unindexed_subject,
+            "full_subj_name": full_subj_name,
+            "citations_data": citations_data,
+            "retrieved_questions": retrieved_questions,
+            "related_topics": related_topics,
+            "topic_verification": topic_verification,
+            "retrieval_res": retrieval_res,
+            "retrieval_latency_ms": retrieval_latency_ms,
+            "user_id": user_id,
+        }
 
-                q_low = user_message.lower()
-                is_2_mark_q = bool(re.search(r"\b(?:2\s*marks?|part\s*a)\b", q_low))
-                if is_2_mark_q:
-                    system_prompt += (
-                        "\nAnswer Length Rule (2-Mark Part A): Give a concise 2 to 4 line answer stating the exact formal definition "
-                        "and core conditions/formula accurately. Do not invent fake rules and avoid empty template headers."
-                    )
-                else:
-                    system_prompt += (
-                        "\nTechnical Accuracy & Formatting Guidelines:\n"
-                        "- Base every technical statement strictly on established computer science / engineering principles and the retrieved RTU syllabus topics and past questions.\n"
-                        "- Cover: exact definition, formal rules/conditions (such as superkey/candidate-key dependency conditions in normalization) or algorithmic steps, a clear diagram/structure where applicable, a concrete traced example, and explicit Time & Space Big-O complexity (e.g. O(V + E), O(V) for graph traversals).\n"
-                        "- Write clear mathematical conditions using standard readable operators like <= and >= (e.g., |xy| <= p, |y| > 0, xy^iz) alongside any formal notation.\n"
-                        "- Do NOT fabricate formulas, paper years, or generic boilerplate titles (never output phrases like 'Step-by-Step Working', 'Key Formula', 'Key Points & Formula', 'Scoring Tip', 'Examiner Focus', 'Technical Formulation', or 'Architectural')."
-                    )
+    @staticmethod
+    def _clean_role_prefix(text: str, allow_empty: bool = False) -> str:
+        """Strips accidental 'Tutor Answer:' / 'Student:' role markers emitted by some LLMs."""
+        cleaned = text or ""
+        if re.search(r'(?:###?\s*Tutor\s*(?:Response|Answer)|(?:Tutor|Senior\s+Tutor)\s*:)', cleaned, re.IGNORECASE):
+            parts = re.split(
+                r'(?:###?\s*Tutor\s*(?:Response|Answer)[^\n]*|(?:Tutor|Senior\s+Tutor)\s*:\s*)',
+                cleaned,
+                flags=re.IGNORECASE,
+                maxsplit=1,
+            )
+            if len(parts) > 1:
+                cleaned = parts[1].strip()
+        cleaned = re.sub(
+            r'^(?:\*{1,2}|#+\s*)?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student|Sample)(?:\s*(?:Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?))?(?:\*{1,2})?\s*[:\n\-]+\s*',
+            '',
+            cleaned,
+            flags=re.IGNORECASE,
+        ).strip()
+        cleaned = re.sub(r'^(?:\*{1,2}|#+\s*)?Student\s+Answer(?:\*{1,2})?\s*[:\n\-]+\s*', '', cleaned, flags=re.IGNORECASE).strip()
+        if allow_empty:
+            return cleaned
+        return cleaned or text
 
-                explicit_prov = provider_name.strip().lower() if provider_name else None
-                cfg_prov = (getattr(settings, "DEFAULT_LLM_PROVIDER", "auto") or "auto").strip().lower()
-                assistant_reply = None
+    @staticmethod
+    def _resolve_llm_candidates(provider_name: Optional[str]) -> List[str]:
+        explicit_prov = provider_name.strip().lower() if provider_name else None
+        cfg_prov = (getattr(settings, "DEFAULT_LLM_PROVIDER", "auto") or "auto").strip().lower()
+        if explicit_prov == "offline" or (not explicit_prov and cfg_prov == "offline"):
+            return []
+        if explicit_prov:
+            return [explicit_prov] if explicit_prov in ("ollama", "groq", "gemini", "openai") else []
+        if cfg_prov == "auto":
+            return resolve_auto_providers(settings.OLLAMA_BASE_URL)
+        auto_rest = [p for p in resolve_auto_providers(settings.OLLAMA_BASE_URL) if p != cfg_prov]
+        return ([cfg_prov] if cfg_prov in ("ollama", "groq", "gemini", "openai") else []) + auto_rest
 
-                if explicit_prov == "offline" or (not explicit_prov and cfg_prov == "offline"):
-                    llm_candidates = []
-                elif explicit_prov:
-                    llm_candidates = [explicit_prov] if explicit_prov in ("ollama", "groq", "gemini", "openai") else []
-                elif cfg_prov == "auto":
-                    llm_candidates = resolve_auto_providers(settings.OLLAMA_BASE_URL)
-                else:
-                    auto_rest = [p for p in resolve_auto_providers(settings.OLLAMA_BASE_URL) if p != cfg_prov]
-                    llm_candidates = ([cfg_prov] if cfg_prov in ("ollama", "groq", "gemini", "openai") else []) + auto_rest
+    @staticmethod
+    def _unindexed_note(prep: Dict[str, Any]) -> str:
+        if prep.get("is_unindexed_subject") and not prep.get("retrieved_questions"):
+            target_subject = prep.get("target_subject")
+            full_subj_name = prep.get("full_subj_name")
+            return f"*Note: Past RTU examination papers for **{target_subject}** ({full_subj_name}) are currently being compiled into the question archive. Here is the tutorial explanation based on the RTU B.Tech syllabus:*\n\n"
+        return ""
 
-                for cand_prov in llm_candidates:
-                    try:
-                        llm_chat = get_llm(cand_prov, settings)
-                        prompt_tpl = ChatPromptTemplate.from_messages([
-                            ("system", system_prompt + "\n\nContext:\n{context}"),
-                            ("human", "{question}"),
-                        ])
-                        chain = (
-                            {"context": lambda _: context_string, "question": lambda x: x}
-                            | prompt_tpl
-                            | llm_chat
-                            | StrOutputParser()
-                        )
-                        assistant_reply = chain.invoke(user_message)
-                        if assistant_reply and assistant_reply.strip():
-                            break
-                    except Exception as e:
-                        logger.warning(f"LangChain provider '{cand_prov}' failed, trying next fallback: {e}")
-                        assistant_reply = None
+    def _finalize_turn(self, db: Session, prep: Dict[str, Any], assistant_reply: str) -> Dict[str, Any]:
+        """Runs output screening, persists messages/citations/memory, closes trace, and builds payload."""
+        start = prep["start"]
+        trace_id = prep["trace_id"]
+        actual_session_id = prep["actual_session_id"]
+        session_obj = prep["session_obj"]
+        user_message = prep["user_message"]
+        intent = prep["intent"]
+        target_subject = prep["target_subject"]
+        rewritten_query = prep["rewritten_query"]
+        input_screening = prep["input_screening"]
+        citations_data = prep["citations_data"]
+        retrieved_questions = prep["retrieved_questions"]
+        related_topics = prep["related_topics"]
+        topic_verification = prep["topic_verification"]
+        retrieval_res = prep["retrieval_res"]
+        retrieval_latency_ms = prep["retrieval_latency_ms"]
+        user_id = prep["user_id"]
 
-                if not assistant_reply:
-                    llm = (
-                        get_llm_provider(provider_type=explicit_prov)
-                        if explicit_prov
-                        else (self.default_llm_provider or get_llm_provider(provider_type="offline"))
-                    )
-                    assistant_reply = llm.generate(
-                        user_prompt=user_message,
-                        retrieved_context=context_string,
-                        chat_history=history_dicts,
-                        system_prompt=system_prompt
-                    )
-
-                clean_reply = assistant_reply
-                if re.search(r'(?:###?\s*Tutor\s*(?:Response|Answer)|(?:Tutor|Senior\s+Tutor)\s*:)', clean_reply, re.IGNORECASE):
-                    parts = re.split(r'(?:###?\s*Tutor\s*(?:Response|Answer)[^\n]*|(?:Tutor|Senior\s+Tutor)\s*:\s*)', clean_reply, flags=re.IGNORECASE, maxsplit=1)
-                    if len(parts) > 1 and parts[1].strip():
-                        clean_reply = parts[1].strip()
-                clean_reply = re.sub(
-                    r'^(?:\*{1,2}|#+\s*)?(?:RTU\s+)?(?:Senior\s+Tutor|Assistant|Tutor|Student|Sample)(?:\s*(?:Response|Answer|Role|Question|Note|Past\s+Year\s+Questions?))?(?:\*{1,2})?\s*[:\n\-]+\s*',
-                    '',
-                    clean_reply,
-                    flags=re.IGNORECASE
-                ).strip()
-                clean_reply = re.sub(r'^(?:\*{1,2}|#+\s*)?Student\s+Answer(?:\*{1,2})?\s*[:\n\-]+\s*', '', clean_reply, flags=re.IGNORECASE).strip()
-                assistant_reply = clean_reply or assistant_reply
-
-                if is_unindexed_subject and not retrieved_questions:
-                    note = f"*Note: Past RTU examination papers for **{target_subject}** ({full_subj_name}) are currently being compiled into the question archive. Here is the tutorial explanation based on the RTU B.Tech syllabus:*\n\n"
-                    assistant_reply = note + assistant_reply
-
-        # Post-Generation Safety, Anti-Leakage, and Academic Screening
         output_screening = AcademicScreeningService.screen_output(
             raw_output=assistant_reply,
             query=user_message,
@@ -1166,7 +1159,6 @@ class ChatService:
         )
         assistant_reply = output_screening.sanitized_output
 
-        # Persist Automated Evaluation Metrics to LangSmith Trace
         send_screening_eval_to_langsmith(
             run_id=trace_id,
             screening_scores={
@@ -1177,38 +1169,33 @@ class ChatService:
             }
         )
 
-        # 6. Persist Messages & Citations
         user_msg_id = f"msg_{uuid.uuid4().hex[:12]}"
-        user_msg = Message(
+        db.add(Message(
             id=user_msg_id,
             session_id=actual_session_id,
             role="user",
             content=user_message
-        )
-        db.add(user_msg)
+        ))
 
         assistant_msg_id = f"msg_{uuid.uuid4().hex[:12]}"
-        assistant_msg = Message(
+        db.add(Message(
             id=assistant_msg_id,
             session_id=actual_session_id,
             role="assistant",
             content=assistant_reply
-        )
-        db.add(assistant_msg)
+        ))
         db.flush()
 
-        # Link citations
         saved_citations = []
         for cit in citations_data:
             cit_id = f"cit_{uuid.uuid4().hex[:12]}"
-            cit_record = Citation(
+            db.add(Citation(
                 id=cit_id,
                 message_id=assistant_msg_id,
                 question_id=cit["question_id"],
                 source_pdf=cit["source_pdf"],
                 page_number=cit.get("page_number", 1)
-            )
-            db.add(cit_record)
+            ))
             saved_citations.append({
                 "citation_id": cit_id,
                 "question_id": cit["question_id"],
@@ -1224,12 +1211,7 @@ class ChatService:
             session_obj.updated_at = datetime.utcnow()
         db.commit()
 
-        is_rejected_turn = (
-            not input_screening.is_safe
-            or not input_screening.is_in_syllabus
-            or intent in (IntentType.SECURITY_VIOLATION, IntentType.OUT_OF_SYLLABUS)
-        )
-        if not is_rejected_turn:
+        if not prep["is_rejected_turn"]:
             try:
                 eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
                 MemoryService.record_turn_interaction(
@@ -1258,7 +1240,7 @@ class ChatService:
 
         return {
             "session_id": actual_session_id,
-            "conversation_id": actual_session_id,  # backward compat
+            "conversation_id": actual_session_id,
             "title": derived_title,
             "subject_id": session_obj.subject_id,
             "mode": session_obj.mode,
@@ -1320,6 +1302,227 @@ class ChatService:
             "retrieval_latency_ms": retrieval_latency_ms,
             "latency_ms": round((time.perf_counter() - start) * 1000, 2)
         }
+
+    def process_turn(
+        self,
+        db: Session,
+        user_message: str,
+        session_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        provider_name: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 5,
+        language_pref: Optional[str] = None,
+        mode: Optional[str] = None,
+        user_id: Optional[str] = None,
+        branch: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Dict[str, Any]:
+        """Executes a complete synchronous Conversational RAG turn."""
+        prep = self._prepare_turn(
+            db=db,
+            user_message=user_message,
+            session_id=session_id,
+            conversation_id=conversation_id,
+            filters=filters,
+            top_k=top_k,
+            language_pref=language_pref,
+            mode=mode,
+            user_id=user_id,
+            branch=branch,
+            year=year,
+        )
+
+        if not prep["requires_llm"]:
+            assistant_reply = prep["static_reply"]
+        else:
+            assistant_reply = None
+            llm_candidates = self._resolve_llm_candidates(provider_name)
+            system_prompt = prep["system_prompt"]
+            context_string = prep["context_string"]
+            for cand_prov in llm_candidates:
+                try:
+                    llm_chat = get_llm(cand_prov, settings)
+                    prompt_tpl = ChatPromptTemplate.from_messages([
+                        ("system", system_prompt + "\n\nContext:\n{context}"),
+                        ("human", "{question}"),
+                    ])
+                    chain = (
+                        {"context": lambda _: context_string, "question": lambda x: x}
+                        | prompt_tpl
+                        | llm_chat
+                        | StrOutputParser()
+                    )
+                    assistant_reply = chain.invoke(user_message)
+                    if assistant_reply and assistant_reply.strip():
+                        break
+                except Exception as e:
+                    logger.warning(f"LangChain provider '{cand_prov}' failed, trying next fallback: {e}")
+                    assistant_reply = None
+
+            if not assistant_reply:
+                explicit_prov = provider_name.strip().lower() if provider_name else None
+                llm = (
+                    get_llm_provider(provider_type=explicit_prov)
+                    if explicit_prov
+                    else (self.default_llm_provider or get_llm_provider(provider_type="offline"))
+                )
+                assistant_reply = llm.generate(
+                    user_prompt=user_message,
+                    retrieved_context=context_string,
+                    chat_history=prep["history_dicts"],
+                    system_prompt=system_prompt
+                )
+
+            assistant_reply = self._unindexed_note(prep) + self._clean_role_prefix(assistant_reply)
+
+        return self._finalize_turn(db, prep, assistant_reply)
+
+    def stream_turn(
+        self,
+        db: Session,
+        user_message: str,
+        session_id: Optional[str] = None,
+        conversation_id: Optional[str] = None,
+        provider_name: Optional[str] = None,
+        filters: Optional[Dict[str, Any]] = None,
+        top_k: int = 5,
+        language_pref: Optional[str] = None,
+        mode: Optional[str] = None,
+        user_id: Optional[str] = None,
+        branch: Optional[str] = None,
+        year: Optional[int] = None,
+    ) -> Iterator[Dict[str, Any]]:
+        """Executes a Conversational RAG turn, yielding real-time token events and a final metadata event."""
+        prep = self._prepare_turn(
+            db=db,
+            user_message=user_message,
+            session_id=session_id,
+            conversation_id=conversation_id,
+            filters=filters,
+            top_k=top_k,
+            language_pref=language_pref,
+            mode=mode,
+            user_id=user_id,
+            branch=branch,
+            year=year,
+        )
+
+        yield {
+            "type": "meta",
+            "session_id": prep["actual_session_id"],
+            "related_topics": [
+                {
+                    "topic_id": t["topic_id"],
+                    "subject": t["subject_short"],
+                    "subject_name": t["subject_name"],
+                    "unit_no": t["unit_no"],
+                    "unit_title": t["unit_title"],
+                    "topic_name": t["topic_name"],
+                    "cosine_score": t["cosine_score"],
+                    "rerank_score": t["rerank_score"],
+                }
+                for t in prep["related_topics"]
+            ],
+            "citations": prep["citations_data"],
+        }
+
+        def _chunk_text(text: str) -> Iterator[str]:
+            words = re.findall(r"\S+\s*", text or "")
+            if not words:
+                if text:
+                    yield text
+                return
+            buf: List[str] = []
+            for w in words:
+                buf.append(w)
+                if len(buf) >= 4 or "\n" in w:
+                    yield "".join(buf)
+                    buf.clear()
+            if buf:
+                yield "".join(buf)
+
+        if not prep["requires_llm"]:
+            assistant_reply = prep["static_reply"]
+            for piece in _chunk_text(assistant_reply):
+                yield {"type": "token", "content": piece}
+        else:
+            llm_candidates = self._resolve_llm_candidates(provider_name)
+            system_prompt = prep["system_prompt"]
+            context_string = prep["context_string"]
+            prefix_note = self._unindexed_note(prep)
+            streamed_parts: List[str] = []
+
+            for cand_prov in llm_candidates:
+                lead_buf = ""
+                lead_flushed = False
+                try:
+                    llm_chat = get_llm(cand_prov, settings)
+                    prompt_tpl = ChatPromptTemplate.from_messages([
+                        ("system", system_prompt + "\n\nContext:\n{context}"),
+                        ("human", "{question}"),
+                    ])
+                    chain = (
+                        {"context": lambda _: context_string, "question": lambda x: x}
+                        | prompt_tpl
+                        | llm_chat
+                        | StrOutputParser()
+                    )
+                    for raw_chunk in chain.stream(user_message):
+                        if not raw_chunk:
+                            continue
+                        clean_chunk = re.sub(r'[\U0001F300-\U0001FAFF\U00002600-\U000027BF]', '', str(raw_chunk))
+                        if not clean_chunk:
+                            continue
+                        if not lead_flushed:
+                            lead_buf += clean_chunk
+                            if len(lead_buf) >= 40 or "\n" in lead_buf:
+                                trimmed = self._clean_role_prefix(lead_buf, allow_empty=True)
+                                if trimmed:
+                                    first_out = prefix_note + trimmed
+                                    streamed_parts.append(first_out)
+                                    yield {"type": "token", "content": first_out}
+                                    lead_flushed = True
+                        else:
+                            streamed_parts.append(clean_chunk)
+                            yield {"type": "token", "content": clean_chunk}
+
+                    if not lead_flushed and lead_buf:
+                        trimmed = self._clean_role_prefix(lead_buf, allow_empty=False)
+                        first_out = prefix_note + trimmed
+                        if first_out:
+                            streamed_parts.append(first_out)
+                            yield {"type": "token", "content": first_out}
+                    if streamed_parts:
+                        break
+                except Exception as e:
+                    logger.warning(f"LangChain streaming provider '{cand_prov}' failed, trying fallback: {e}")
+                    if streamed_parts:
+                        break
+
+            if streamed_parts:
+                assistant_reply = "".join(streamed_parts)
+            else:
+                explicit_prov = provider_name.strip().lower() if provider_name else None
+                llm = (
+                    get_llm_provider(provider_type=explicit_prov)
+                    if explicit_prov
+                    else (self.default_llm_provider or get_llm_provider(provider_type="offline"))
+                )
+                fallback_raw = llm.generate(
+                    user_prompt=user_message,
+                    retrieved_context=context_string,
+                    chat_history=prep["history_dicts"],
+                    system_prompt=system_prompt,
+                )
+                assistant_reply = prefix_note + self._clean_role_prefix(fallback_raw)
+                for piece in _chunk_text(assistant_reply):
+                    yield {"type": "token", "content": piece}
+
+        final_payload = self._finalize_turn(db, prep, assistant_reply)
+        if final_payload["answer"] != assistant_reply:
+            yield {"type": "replace", "content": final_payload["answer"]}
+        yield {"type": "done", **final_payload}
 
     # Backward compatibility alias
     send_message = process_turn
