@@ -12,6 +12,7 @@ Total Commits Recorded: 26 (Latest commit message: "latest")
    - M	rtu-ai-assistant/backend/app/services/quiz_service.py
    - M	rtu-ai-assistant/backend/app/api/endpoints.py
    - M	rtu-ai-assistant/backend/tests/test_student_long_term_memory_e2e.py
+   - M	.gitattributes
    - M	app.py
    - M	requirements.txt
    - M	streamlit_app.py
@@ -19,6 +20,7 @@ Total Commits Recorded: 26 (Latest commit message: "latest")
    - M	history.txt
 4. Change Details   :
    Closed remaining long-term memory backend gaps and fixed the Hugging Face Space FastAPI `/api/*` routing `405 Method Not Allowed` issue:
+   - .gitattributes: Tracked `*.faiss` and `*.npz` binaries via Git LFS so Hugging Face Hub accepts `lc_faiss/index.faiss` and `topic_embeddings.npz`.
    - chat_service.py: Marked TopicPaperVerifier OUT_OF_SYLLABUS_TOPIC rejections as IntentType.OUT_OF_SYLLABUS and guarded MemoryService.record_turn_interaction() with `is_rejected_turn` so rejected off-topic / security prompts are not saved into `student_memories`.
    - quiz_service.py & endpoints.py: Added `user_id` to `QuizAnswerRequest` and `QuizService.evaluate_answer()`, resolved user/subject/topic context (`_resolve_quiz_context`), and recorded real quiz grades into `TopicMastery` via `_record_quiz_mastery()`.
    - endpoints.py: Exposed Student Long-Term Memory REST APIs (`GET /api/memory`, `POST /api/memory`, `POST /api/memory/mastery`, `DELETE /api/memory/{memory_id}`, `DELETE /api/memory`) while keeping `streamlit_app.py` sidebar UI minimal.
