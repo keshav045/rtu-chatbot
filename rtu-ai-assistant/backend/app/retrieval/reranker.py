@@ -107,8 +107,8 @@ class CrossEncoderReranker:
                 pass
             try:
                 from sentence_transformers import CrossEncoder
-                self.model = CrossEncoder(RERANKER_MODEL)
-                logger.info("CrossEncoder reranker loaded successfully.")
+                self.model = CrossEncoder(RERANKER_MODEL, device="cpu")
+                logger.info("CrossEncoder reranker loaded on CPU successfully.")
             except Exception as e:
                 logger.warning(f"CrossEncoder reranker skipped in low-memory environment: {e}")
                 self.model = None
@@ -124,13 +124,13 @@ class CrossEncoderReranker:
 
         self._load_model()
         if self.model is None:
-            # High-accuracy fallback: candidates are already ranked by Reciprocal Rank Fusion
-            # Still apply MMR on the fallback list for diversity
+            # Safe fallback: keep RRF order without inflating logit scores above out-of-scope gates
             for i, doc in enumerate(candidates):
+                doc = dict(doc)
+                doc["rerank_fallback"] = True
                 if "rerank_score" not in doc:
-                    doc = dict(doc)
-                    doc["rerank_score"] = float(len(candidates) - i)  # rank-based proxy
-                    candidates[i] = doc
+                    doc["rerank_score"] = round(-7.5 - 0.1 * i, 4)
+                candidates[i] = doc
             return _mmr_select(candidates[:top_k * 2], top_k)
 
         try:

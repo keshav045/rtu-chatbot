@@ -24,12 +24,12 @@ class DenseIndexer:
         self.id_mapping = []  # list of question_id corresponding to vector index i
 
     def load_model(self):
-        """Loads SentenceTransformer eagerly into memory."""
+        """Loads SentenceTransformer eagerly into CPU memory (safe under ZeroGPU proxies)."""
         if self.model is None:
             try:
                 from sentence_transformers import SentenceTransformer
-                self.model = SentenceTransformer(MODEL_NAME)
-                logger.info(f"SentenceTransformer ({MODEL_NAME}) loaded into memory successfully.")
+                self.model = SentenceTransformer(MODEL_NAME, device="cpu")
+                logger.info(f"SentenceTransformer ({MODEL_NAME}) loaded on CPU successfully.")
             except Exception as e:
                 logger.error(f"Error loading SentenceTransformer: {e}")
                 raise e

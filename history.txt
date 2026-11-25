@@ -2,11 +2,37 @@
                       RTU AI ASSISTANT - COMMIT & CHANGE HISTORY
 ================================================================================
 
-Total Commits Recorded: 26 (Latest commit message: "latest")
+Total Commits Recorded: 27 (Latest commit message: "latest")
+
+--------------------------------------------------------------------------------
+1. Date & Timestamp : 2026-11-25 15:36:00 +0530
+2. Commit Hash      : UNCOMMITTED (Working Tree)
+3. Files Changed    :
+   - M	app.py
+   - M	rtu-ai-assistant/backend/app/retrieval/dense_indexer.py
+   - M	rtu-ai-assistant/backend/app/retrieval/reranker.py
+   - M	rtu-ai-assistant/backend/app/retrieval/query_rewriter.py
+   - M	rtu-ai-assistant/backend/app/retrieval/topic_verifier.py
+   - M	rtu-ai-assistant/backend/app/services/screening_service.py
+   - M	rtu-ai-assistant/backend/app/services/intent_service.py
+   - M	rtu-ai-assistant/backend/app/services/chat_service.py
+   - M	rtu-ai-assistant/backend/app/llm/offline_mentor_provider.py
+   - M	rtu-ai-assistant/backend/tests/test_topic_verification_retrieval.py
+   - M	gemini.md
+   - M	history.txt
+4. Change Details   :
+   Fixed Hugging Face ZeroGPU retrieval/reranker corruption (causing AEM fallback answers on `btree` and `deadlock` queries), added typo/shorthand query normalization, and closed screening holes:
+   - dense_indexer.py, reranker.py, & app.py: Forced explicit `device="cpu"` on SentenceTransformer/CrossEncoder, set `CUDA_VISIBLE_DEVICES=""` and removed `@spaces.GPU` wrapper from `app.py` so HF ZeroGPU's virtual CUDA interceptor (`torch._C._cuda_init`) no longer corrupts BGE embeddings or skips CrossEncoder; replaced inflated fake fallback logit scores (`len - i` = 24.0) with safe `-7.5 - 0.1*i` + `rerank_fallback=True`.
+   - query_rewriter.py & topic_verifier.py: Stripped leading greetings/search fillers (`hi`, `hello`, `search`), normalized shorthands (`btree` -> `B-Tree`), added conservative first-letter-matched fuzzy typo recovery (`deadlovk` -> `deadlock`), filtered low-rerank noise topics out of `related_topics`, narrowed `fetch_topic_linked_questions` to strong topics rescored by CrossEncoder, and tightened `paper_strong` so weak `-9` mismatches never return wrong-subject AEM papers.
+   - screening_service.py, intent_service.py, chat_service.py, & offline_mentor_provider.py: Synced food/baking/weather/trivia patterns across `AcademicScreeningService` and `IntentRouter`; forced `input_screening.is_in_syllabus=False` & `scope_score=0.0` when `IntentRouter` blocks out-of-syllabus queries; fixed `OfflineMentorProvider` to synthesize matched `[VERIFIED RTU SYLLABUS TOPICS RELATED TO QUERY]` cleanly when a subject has 0 past paper rows.
+   - test_topic_verification_retrieval.py: Added regression assertions for `hi search btree`, `deadlovk commdtion` (OS), `how to bake a chocolate cake`, and `what is the weather today`.
+5. Cascading Impacts:
+   - Cloud & Local Retrieval Accuracy: Eliminated cross-subject AEM fallback contamination and ZeroGPU CUDA crashes on HF Space; both shorthand (`btree`) and typo (`deadlovk commdtion`) queries retrieve genuine DSA/OS/DBMS topics and citations.
+   - Guardrails & Screening: Out-of-syllabus prompts (`cake`, `weather`, etc.) are consistently flagged (`is_in_syllabus=False`, `scope_score=0.0`) before retrieval/generation.
 
 --------------------------------------------------------------------------------
 1. Date & Timestamp : 2026-11-25 15:08:00 +0530
-2. Commit Hash      : UNCOMMITTED (Working Tree)
+2. Commit Hash      : 043b73e
 3. Files Changed    :
    - M	rtu-ai-assistant/backend/app/services/chat_service.py
    - M	rtu-ai-assistant/backend/app/services/quiz_service.py

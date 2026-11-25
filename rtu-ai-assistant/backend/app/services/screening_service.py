@@ -12,23 +12,28 @@ from pydantic import BaseModel, Field
 
 # Out-of-syllabus non-academic indicator keywords
 OUT_OF_SCOPE_PATTERNS = [
-    r"\b(cricket|ipl|score|football|fifa|messi|ronaldo|world\s*cup)\b",
-    r"\b(bollywood|hollywood|movie|cinema|actor|actress|trailer|box\s*office)\b",
-    r"\b(recipe|cooking|biryani|paneer|pizza|burger|cocktail)\b",
-    r"\b(stock\s*market|crypto|bitcoin|trading|forex|lottery)\b",
+    r"\b(cricket|ipl|score|football|fifa|messi|ronaldo|world\s*cup|kohli|dhoni)\b",
+    r"\b(bollywood|hollywood|movie|cinema|actor|actress|trailer|box\s*office|netflix|youtube)\b",
+    r"\b(recipe|cooking|cook|bake|baking|cake|biryani|paneer|pizza|burger|pasta|noodles|maggi|cocktail|coffee|tea|breakfast|lunch|dinner)\b",
+    r"\b(weather|forecast|temperature\s+outside|rain\s+today|climate\s+today|flight|hotel|tourism)\b",
+    r"\b(song|music|lyrics|poem|shayari|joke|memes?|pubg|bgmi|free\s*fire|gta)\b",
+    r"\b(stock\s*market|crypto|bitcoin|trading|forex|lottery|betting)\b",
     r"\b(horoscope|astrology|zodiac|kundali)\b",
-    r"\b(politics|election|modi|rahul\s*gandhi|bjp|congress|vote)\b"
+    r"\b(girlfriend|boyfriend|dating|love\s+advice|marriage|fever|medicine|doctor|weight\s+loss|diet\s+plan)\b",
+    r"\b(politics|election|modi|rahul\s*gandhi|bjp|congress|vote|prime\s+minister|president|capital\s+of)\b",
+    r"\b(jee\s+advanced|jee\s+main|iit\s+cutoff|neet)\b",
 ]
 
 # Security & Prompt Injection attack patterns
 INJECTION_PATTERNS = [
-    r"ignore\s+(all\s+)?(previous|prior|above)\s+instructions?",
+    r"(ignore|disregard|forget)\s+(all\s+)?(your\s+)?(previous|prior|above)?\s*instructions?",
     r"you\s+are\s+now\s+(in\s+)?(dan|developer|unrestricted|jailbreak)\s+mode",
-    r"reveal\s+(your\s+)?(system\s+prompt|hidden\s+rules|instructions|api\s*key)",
-    r"repeat\s+(everything|the\s+text)\s+(above|before)",
-    r"bypass\s+(all\s+)?(content|security|safety)\s+filters?",
-    r"leak\s+(the\s+)?(exam\s+paper|question\s+paper)\s+before\s+exam",
-    r"hack\s+(rtu|university|portal|result|database)"
+    r"\b(act\s+as\s+an?\s+unrestricted|do\s+anything\s+now|jailbreak|developer\s+mode)\b",
+    r"(reveal|print|dump|show)\s+(me\s+)?(your\s+)?(system\s+prompt|hidden\s+rules|rules|instructions?|api\s*keys?|credentials?)",
+    r"repeat\s+(all\s+)?(everything|the\s+text)\s+(above|before)",
+    r"bypass\s+(all\s+)?(content|security|safety|rtu)\s*(filters?|rules?|guardrails?)",
+    r"leak\s+(the\s+)?(exam\s+paper|question\s+paper|upcoming\s+paper)",
+    r"hack\s+(into\s+)?(rtu|university|portal|result|database)",
 ]
 
 # Prompt Leakage Patterns in Output

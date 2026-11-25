@@ -12,19 +12,16 @@ import uuid
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 
+# Keep PyTorch inference strictly on CPU so ZeroGPU CUDA proxies never intercept BGE/CrossEncoder tensors
+os.environ.setdefault("CUDA_VISIBLE_DEVICES", "")
+
 # --- Ensure backend package resolution ---
 BASE_DIR = Path(__file__).resolve().parent
 BACKEND_DIR = BASE_DIR / "rtu-ai-assistant" / "backend"
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
-# ZeroGPU decorator support
-try:
-    import spaces
-    HAS_ZEROGPU = True
-except ImportError:
-    spaces = None
-    HAS_ZEROGPU = False
+HAS_ZEROGPU = False
 
 import gradio as gr
 import pandas as pd
@@ -191,10 +188,6 @@ def run_chat_turn(
     new_history.append({"role": "assistant", "content": assistant_reply})
 
     return new_history, citations_md, current_session
-
-# Optional ZeroGPU dynamic GPU acceleration
-if HAS_ZEROGPU:
-    run_chat_turn = spaces.GPU(duration=25)(run_chat_turn)
 
 # --- Gradio UI Layout ---
 custom_css = """

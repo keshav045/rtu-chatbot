@@ -106,13 +106,17 @@ class ContextualQueryRewriter:
         ]
 
     def normalize_hinglish(self, query: str) -> str:
-        """Convert common Hinglish phrases to English equivalents."""
+        """Convert common Hinglish phrases, leading search filler, and compact tech shorthands."""
         q = query
         for pattern, replacement in self._hinglish_compiled:
             q = pattern.sub(replacement, q)
+        q = re.sub(r"^\s*(?:search\s+(?:for|about)\s+|search\s+)", "", q, flags=re.I)
+        q = re.sub(r"\bbtrees?\b", "B-Tree", q, flags=re.I)
+        q = re.sub(r"\bb\+[\s-]?trees?\b", "B+ Tree", q, flags=re.I)
+        q = re.sub(r"\bavltrees?\b", "AVL Tree", q, flags=re.I)
         # Normalize multiple spaces
         q = re.sub(r"\s{2,}", " ", q).strip()
-        return q
+        return q or query.strip()
 
     def expand_synonyms(self, query: str) -> str:
         """Expand RTU subject abbreviations/synonyms for better retrieval."""

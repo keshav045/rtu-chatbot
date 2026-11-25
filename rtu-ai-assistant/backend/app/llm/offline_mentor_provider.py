@@ -28,8 +28,12 @@ class OfflineMentorProvider(BaseLLMProvider):
         hinglish_keywords = ["kya", "hai", "kaise", "samjhao", "bhai", "batao", "marks ke liye", "bhi", "nahi", "bata do", "bataiye", "karen", "hota", "karo", "senior"]
         is_hinglish = any(re.search(rf"\b{kw}\b", prompt_lower) for kw in hinglish_keywords) or ("hinglish" in system_prompt.lower())
 
-        # If no retrieved context is provided or found
-        if not retrieved_context or "No matching past RTU examination questions found" in retrieved_context or "No relevant RTU examination questions found" in retrieved_context:
+        # Check if retrieved context includes verified RTU syllabus topics even when past paper questions are absent
+        has_verified_topics = "[VERIFIED RTU SYLLABUS TOPICS RELATED TO QUERY]" in (retrieved_context or "")
+        if not retrieved_context or ((
+            "No matching past RTU examination questions found" in retrieved_context
+            or "No relevant RTU examination questions found" in retrieved_context
+        ) and not has_verified_topics):
             if is_hinglish:
                 return (
                     "### RTU Senior Tutor Notice\n\n"
@@ -101,6 +105,18 @@ class OfflineMentorProvider(BaseLLMProvider):
                     })
 
         if not parsed_questions:
+            if has_verified_topics:
+                topic_block = retrieved_context.split("[VERIFIED RTU SYLLABUS TOPICS RELATED TO QUERY]", 1)[1]
+                topic_block = topic_block.split("[VERIFIED RTU PAST EXAMINATION QUESTIONS]", 1)[0].strip()
+                topic_lines = [line.strip() for line in topic_block.splitlines() if line.strip().startswith("-")]
+                formatted_topics = "\n".join(topic_lines[:6]) if topic_lines else topic_block
+                return (
+                    f"### RTU Syllabus Topics Matched\n\n"
+                    f"The following official RTU syllabus topics match your query:\n\n"
+                    f"{formatted_topics}\n\n"
+                    f"Focus your exam preparation on formal definitions, key properties/conditions, "
+                    f"neat block or state diagrams, and a worked step-by-step example for these syllabus units."
+                )
             return (
                 f"### RTU Senior Tutor\n\n"
                 f"Retrieved Context:\n{retrieved_context}\n\n"

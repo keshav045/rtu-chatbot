@@ -36,6 +36,8 @@ def test_topic_verifier_blocks_out_of_box_on_unindexed_subjects():
 
         for msg, subj in [
             ("How to make pasta at home?", "OS"),
+            ("how to bake a chocolate cake", None),
+            ("what is the weather today", None),
             ("Who won the NBA championship in 2024?", None),
             ("Best tourist attractions in Jaipur for weekend trip.", None),
             ("How to build a Next.js e-commerce store with Tailwind CSS?", None),
@@ -86,6 +88,29 @@ def test_topic_verifier_retrieves_all_related_topics_on_rtu_queries():
         assert btree_res["screening"]["is_in_syllabus"] is True
         assert len(btree_res.get("related_topics", [])) >= 2
         assert len(btree_res.get("citations", [])) > 0
+
+        # Compact/noisy shorthand ('hi search btree') must resolve to DSA B-Tree, never AEM
+        noisy_btree = chat_svc.process_turn(
+            db=db,
+            user_message="hi search btree",
+            provider_name="offline",
+        )
+        created_sids.append(noisy_btree.get("session_id"))
+        assert noisy_btree["screening"]["is_in_syllabus"] is True
+        assert any(t["subject"] == "DSA" for t in noisy_btree.get("related_topics", []))
+        assert all(c["subject"] != "AEM" for c in noisy_btree.get("citations", []))
+
+        # Typo query ('deadlovk commdtion') must still find OS/DBMS deadlock, never AEM
+        typo_deadlock = chat_svc.process_turn(
+            db=db,
+            user_message="deadlovk commdtion",
+            filters={"subject": "OS"},
+            provider_name="offline",
+        )
+        created_sids.append(typo_deadlock.get("session_id"))
+        assert typo_deadlock["screening"]["is_in_syllabus"] is True
+        assert any("deadlock" in t["topic_name"].lower() for t in typo_deadlock.get("related_topics", []))
+        assert "no relevant syllabus topics" not in typo_deadlock.get("answer", "").lower()
     finally:
         _cleanup_sessions(db, created_sids)
         db.close()

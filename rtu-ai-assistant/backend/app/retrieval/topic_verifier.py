@@ -10,6 +10,7 @@ RTU Syllabus Topic & Past-Paper Verification and Related-Topic Retrieval Engine.
    context, and topic-linked past-paper questions for full grounded context.
 """
 
+import difflib
 import json
 import logging
 import re
@@ -41,6 +42,7 @@ _STOPWORDS = {
     "theory", "method", "methods", "technique", "techniques", "analysis",
     "design", "basics", "basic", "introduction", "fundamentals", "fundamental",
     "engineering", "computer", "science", "rtu", "exam", "paper", "syllabus",
+    "hi", "hey", "hello", "search", "please", "pls", "ok", "okay", "condition", "conditions",
 }
 
 
@@ -80,6 +82,7 @@ class TopicPaperVerifier:
         self.cache_meta = index_dir / "topic_meta.json"
         self.topics: List[Dict[str, Any]] = []
         self.embeddings: Optional[np.ndarray] = None
+        self.vocab_tokens: set = set()
         self._is_loaded = False
 
     def load(self, db: Session, dense_model: Any, force_rebuild: bool = False) -> None:
@@ -149,6 +152,14 @@ class TopicPaperVerifier:
             doc_texts.append(doc_text)
 
         self.topics = records
+        vocab: set = {
+            "condition", "conditions", "necessary", "insertion", "deletion", "traversal",
+            "complexity", "difference", "properties", "deadlock", "algorithm", "algorithms",
+        }
+        for rec in records:
+            for tok in re.findall(r"[a-z]{4,}", f"{rec['topic_name']} {rec['aliases']}".lower()):
+                vocab.add(tok)
+        self.vocab_tokens = vocab
         if not records or dense_model is None:
             self.embeddings = None
             self._is_loaded = True
@@ -189,6 +200,41 @@ class TopicPaperVerifier:
 
         self._is_loaded = True
         logger.info(f"[TopicPaperVerifier] Indexed {len(self.topics)} RTU syllabus topics.")
+
+    def _normalize_retrieval_query(self, query: str) -> str:
+        """Cleans greetings/fillers, expands compact RTU shorthands, and fixes domain typos."""
+        q = query.strip()
+        q = re.sub(r"^\s*(?:hi+|hey+|hello+|please|pls)\b[\s,!.:-]*", "", q, flags=re.I)
+        q = re.sub(r"^\s*(?:search\s+(?:for|about)\s+|search\s+)", "", q, flags=re.I)
+        q = re.sub(r"\bbtrees?\b", "B-Tree", q, flags=re.I)
+        q = re.sub(r"\bb\+[\s-]?trees?\b", "B+ Tree", q, flags=re.I)
+        q = re.sub(r"\bavltrees?\b", "AVL Tree", q, flags=re.I)
+
+        if not self.vocab_tokens:
+            return q or query.strip()
+
+        def _fix_tok(match: re.Match) -> str:
+            tok = match.group(0)
+            low = tok.lower()
+            if len(low) < 6 or low in self.vocab_tokens or low in _STOPWORDS:
+                return tok
+            same_head = [w for w in self.vocab_tokens if w[0] == low[0] and abs(len(w) - len(low)) <= 3]
+            if not same_head:
+                return tok
+            matches = difflib.get_close_matches(low, same_head, n=3, cutoff=0.77)
+            if not matches:
+                return tok
+            best = max(
+                matches,
+                key=lambda cand: (
+                    difflib.SequenceMatcher(None, low, cand).ratio()
+                    - 0.02 * abs(len(cand) - len(low))
+                ),
+            )
+            return best
+
+        corrected = re.sub(r"\b[a-zA-Z]{6,}\b", _fix_tok, q)
+        return corrected.strip() or q or query.strip()
 
     def _subject_matches(self, topic_rec: Dict[str, Any], target_subject: str) -> bool:
         clean = target_subject.replace("SUBJ_", "").strip().upper()
@@ -310,17 +356,26 @@ class TopicPaperVerifier:
         best_rerank = max((x["rerank_score"] for x in shortlist), default=-999.0)
         best_kw = max((x["phrase_hits"] + x["token_hits"] for x in shortlist), default=0)
 
-        # Retain ALL closely related syllabus topics matching the query
+        # Retain ALL closely related syllabus topics matching the query without unrelated cross-subject noise
         related_topics: List[Dict[str, Any]] = []
         if shortlist:
             top_cos = shortlist[0]["cosine_score"]
+            top_subj_id = shortlist[0]["subject_id"]
+            top_strong = shortlist[0]["rerank_score"] >= -6.0 or shortlist[0]["phrase_hits"] > 0
             for idx, item in enumerate(shortlist[:max_topics]):
+                same_subj_sibling = (
+                    top_strong
+                    and item["subject_id"] == top_subj_id
+                    and item["cosine_score"] >= 0.60
+                    and (top_cos - item["cosine_score"]) <= 0.16
+                )
                 is_related = (
-                    item["phrase_hits"] > 0
-                    or item["token_hits"] >= 2
+                    (item["phrase_hits"] > 0 and item["rerank_score"] >= -9.0)
+                    or (item["token_hits"] >= 2 and item["rerank_score"] >= -8.0)
                     or item["rerank_score"] >= -4.5
-                    or (item["cosine_score"] >= 0.56 and (top_cos - item["cosine_score"]) <= 0.14)
-                    or (idx == 0 and item["cosine_score"] >= 0.52)
+                    or same_subj_sibling
+                    or (item["cosine_score"] >= 0.58 and item["rerank_score"] >= -6.5 and (top_cos - item["cosine_score"]) <= 0.14)
+                    or (idx == 0 and item["cosine_score"] >= 0.60 and item["rerank_score"] >= -6.5)
                 )
                 if is_related:
                     related_topics.append(item)
@@ -439,10 +494,11 @@ class TopicPaperVerifier:
 
         dense_model = getattr(getattr(pipeline, "dense_indexer", None), "model", None)
         reranker = getattr(pipeline, "reranker", None)
+        effective_query = self._normalize_retrieval_query(query)
 
         # 1. Search & score all syllabus topics (for target_subject if specified, else across RTU)
         topic_eval = self.score_topics(
-            query=query,
+            query=effective_query,
             dense_model=dense_model,
             reranker=reranker,
             target_subject=target_subject,
@@ -455,7 +511,7 @@ class TopicPaperVerifier:
         global_topic_eval = topic_eval
         if target_subject and (topic_eval["subject_topic_count"] == 0 or topic_eval["best_rerank"] < -6.0):
             global_topic_eval = self.score_topics(
-                query=query,
+                query=effective_query,
                 dense_model=dense_model,
                 reranker=reranker,
                 target_subject=None,
@@ -466,7 +522,7 @@ class TopicPaperVerifier:
 
         # 2. Search past-paper question archive via Hybrid RetrievalPipeline
         q_res = pipeline.retrieve(
-            query=query,
+            query=effective_query,
             subject=target_subject,
             semester=filter_kwargs.get("semester"),
             year_from=filter_kwargs.get("year_from"),
@@ -503,18 +559,27 @@ class TopicPaperVerifier:
             c_matches = list(raw_citations)
 
         best_q_score = max((rq.get("rerank_score", -999.0) for rq in q_matches), default=-999.0)
+        q_is_fallback = any(rq.get("rerank_fallback", False) for rq in q_matches)
 
-        # 3. Expand question set with topic-linked DB questions for all matched topics
+        # 3. Expand question set with topic-linked DB questions ONLY for strong matched topics
         related_topics = topic_eval["related_topics"]
         if not related_topics and topic_eval["subject_topic_count"] == 0 and global_topic_eval["related_topics"]:
             related_topics = global_topic_eval["related_topics"]
 
-        matched_topic_ids = [t["topic_id"] for t in related_topics]
+        strong_topic_ids = [
+            t["topic_id"]
+            for t in related_topics
+            if t["phrase_hits"] > 0 or t["token_hits"] >= 2 or t["rerank_score"] >= -4.5
+        ]
+        if not strong_topic_ids and related_topics:
+            strong_topic_ids = [t["topic_id"] for t in related_topics[:2]]
+
+        matched_topic_ids = list(strong_topic_ids)
         # Also include topics referenced directly by confident question hits
         q_thresh = getattr(settings, "OUT_OF_SCOPE_THRESHOLD", -9.5)
         cit_thresh = getattr(settings, "CITATION_RELEVANCE_THRESHOLD", -6.0)
         for rq in q_matches:
-            if rq.get("rerank_score", -999.0) >= cit_thresh and rq.get("topic_id"):
+            if not rq.get("rerank_fallback") and rq.get("rerank_score", -999.0) >= cit_thresh and rq.get("topic_id"):
                 tid = rq["topic_id"]
                 if tid not in matched_topic_ids:
                     matched_topic_ids.append(tid)
@@ -525,13 +590,47 @@ class TopicPaperVerifier:
             topic_ids=matched_topic_ids,
             existing_qids=existing_qids,
             target_subject=target_subject,
-            limit=6,
+            limit=8,
         )
-        # Keep retrieval-ranked questions first, followed by additional topic-linked questions
-        all_questions = q_matches + extra_qs
-        all_citations = [c for c, rq in zip(c_matches, q_matches) if rq.get("rerank_score", -999.0) >= cit_thresh]
-        if best_q_score >= cit_thresh or topic_eval["best_keyword_hits"] > 0:
-            all_citations.extend(extra_cits)
+        # Re-score extra topic-linked questions with CrossEncoder when available so matching years/topics lead
+        if extra_qs and reranker is not None:
+            for eq in extra_qs:
+                eq["document_text"] = (
+                    f"{eq.get('subject', '')} ({eq.get('subject_short', '')}) | "
+                    f"{eq.get('topic_name', '')} | {eq.get('question_text', '')}"
+                )
+            scored_extra = reranker.rerank(effective_query, extra_qs, top_k=len(extra_qs))
+            extra_map = {e["question_id"]: e for e in scored_extra}
+            kept_extra_qs: List[Dict[str, Any]] = []
+            kept_extra_cits: List[Dict[str, Any]] = []
+            for eq, ec in zip(extra_qs, extra_cits):
+                rescored = extra_map.get(eq["question_id"], eq)
+                r_sc = rescored.get("rerank_score", -999.0)
+                if eq.get("topic_id") in strong_topic_ids or r_sc >= cit_thresh:
+                    eq["rerank_score"] = r_sc
+                    ec["rerank_score"] = r_sc
+                    kept_extra_qs.append(eq)
+                    kept_extra_cits.append(ec)
+            kept_extra_qs.sort(key=lambda x: x.get("rerank_score", -999.0), reverse=True)
+            kept_extra_cits.sort(key=lambda x: x.get("rerank_score", -999.0), reverse=True)
+            extra_qs, extra_cits = kept_extra_qs, kept_extra_cits
+
+        # Keep highest-scoring retrieval & topic-linked questions in relevance order
+        all_questions = sorted(
+            q_matches + extra_qs,
+            key=lambda x: (x.get("rerank_score", -999.0) if not x.get("rerank_fallback") else -8.0),
+            reverse=True,
+        )
+        confident_cits = [
+            c for c, rq in zip(c_matches, q_matches)
+            if not rq.get("rerank_fallback") and rq.get("rerank_score", -999.0) >= cit_thresh
+        ]
+        if extra_cits and (best_q_score >= cit_thresh or topic_eval["best_keyword_hits"] > 0 or strong_topic_ids):
+            combined_cits = extra_cits + confident_cits
+            combined_cits.sort(key=lambda x: x.get("rerank_score", -999.0), reverse=True)
+            all_citations = combined_cits
+        else:
+            all_citations = confident_cits
 
         # 4. Determine RTU-related vs out-of-the-box classification (calibrated empirically on BGE + MiniLM)
         t_rerank = topic_eval["best_rerank"]
@@ -551,9 +650,12 @@ class TopicPaperVerifier:
             or (g_rerank >= -4.8 and g_cos >= 0.54)
             or (g_cos >= 0.72 and g_rerank >= -7.5)
         )
-        paper_strong = bool(q_matches) and (
-            best_q_score >= -8.5
-            or (best_q_score >= q_thresh and (t_rerank >= -7.5 or g_rerank >= -7.5 or t_cos >= 0.65))
+        paper_strong = bool(q_matches) and (not q_is_fallback) and (
+            best_q_score >= -7.5
+            or (
+                best_q_score >= q_thresh
+                and ((t_rerank >= -6.5 and t_cos >= 0.50) or (g_rerank >= -6.5 and g_cos >= 0.50))
+            )
         )
 
         # If target_subject is explicitly set and has topics, verify query belongs to RTU (or target subject)

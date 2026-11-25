@@ -431,6 +431,10 @@ class ChatService:
             intent = IntentType.SECURITY_VIOLATION
         elif not input_screening.is_in_syllabus and intent not in (IntentType.GREETING, IntentType.CLOSING, IntentType.HELP_CAPABILITIES, IntentType.SUBJECT_SELECT):
             intent = IntentType.OUT_OF_SYLLABUS
+        elif intent == IntentType.OUT_OF_SYLLABUS:
+            input_screening.is_in_syllabus = False
+            input_screening.scope_score = 0.0
+            input_screening.violation_reason = "OUT_OF_SYLLABUS_TOPIC"
 
         if intent == IntentType.SECURITY_VIOLATION:
             citations_data = []

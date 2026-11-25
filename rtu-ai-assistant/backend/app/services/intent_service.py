@@ -294,12 +294,14 @@ class IntentRouter:
             if not (has_tech or has_question_words):
                 return IntentType.SUBJECT_SELECT
 
-        # 8. General Out of Syllabus / Irrelevant (e.g., cricket, sports, politics, jokes, recipes, general trivia, medical, crypto)
+        # 8. General Out of Syllabus / Irrelevant (e.g., cricket, sports, politics, jokes, recipes, weather, general trivia, medical, crypto)
         if re.search(
-            r'\b(cricket|ipl|football|sports?|match|movie|song|poem|joke|recipe|food|dishes?|weather|prime\s+minister|president|capital\s+of|love|dating|girlfriend|boyfriend|bitcoin|crypto|stock\s+market|medical|fever|disease|treatment|jee\s+advanced|jee\s+main|iit\s+cutoff)\b',
+            r'\b(cricket|ipl|football|sports?|match|movie|cinema|bollywood|hollywood|song|music|lyrics|poem|joke|shayari|recipe|cooking|cook|bake|baking|cake|biryani|paneer|pizza|burger|pasta|noodles|maggi|food|dishes?|weather|forecast|prime\s+minister|president|capital\s+of|love|dating|girlfriend|boyfriend|bitcoin|crypto|stock\s+market|medical|fever|medicine|doctor|treatment|horoscope|astrology|jee\s+advanced|jee\s+main|iit\s+cutoff)\b',
             q
         ):
-            return IntentType.OUT_OF_SYLLABUS
+            has_tech = any(re.search(rf'\b{re.escape(term)}\b', q) for term in TECH_TERMS)
+            if not has_tech:
+                return IntentType.OUT_OF_SYLLABUS
 
         # 9. Default to Exam Syllabus Question (triggers Hybrid FAISS + BM25 RAG)
         return IntentType.EXAM_QUESTION

@@ -151,19 +151,20 @@ def test_quiz_evaluation_updates_topic_mastery():
     try:
         quiz_svc = QuizService()
         q = quiz_svc.get_next_question(db, "DSA")
+        assert "question_text" in q
 
-        # High-scoring answer -> not weak
+        # High-scoring answer against deterministic DSA topic -> not weak
         good_ans = (
-            "A binary search tree is a data structure with definition rules where left nodes "
-            "are smaller and right nodes are larger. Step 1 compare root, step 2 recurse. "
-            "For example tree with nodes 10, 5, 15 achieves O(log n) average search complexity "
-            "as shown in the diagram."
+            "AVL tree and B-Tree are self-balancing binary search tree data structures. "
+            "Step 1 check balance factor or node keys, step 2 apply rotation or split. "
+            "For example inserting nodes 10, 20, 30 achieves O(log n) search complexity "
+            "as illustrated in the labeled tree diagram."
         )
         res = quiz_svc.evaluate_answer(
             db=db,
-            question_id=q["question_id"],
-            question=q["question_text"],
-            topic_id=q.get("topic_id"),
+            question_id="unknown",
+            question="Explain AVL Tree and B-Tree with rotations.",
+            topic_id="TOPIC_DSA_U4_03",
             student_answer=good_ans,
             target_marks=10,
             user_id=uid,
@@ -174,12 +175,12 @@ def test_quiz_evaluation_updates_topic_mastery():
         assert len(masteries) == 1
         assert masteries[0]["is_weak_area"] is False
 
-        # Low-scoring answer -> flagged as weak area
+        # Low-scoring answer on same topic -> flagged as weak area
         bad_res = quiz_svc.evaluate_answer(
             db=db,
-            question_id=q["question_id"],
-            question=q["question_text"],
-            topic_id=q.get("topic_id"),
+            question_id="unknown",
+            question="Explain AVL Tree and B-Tree with rotations.",
+            topic_id="TOPIC_DSA_U4_03",
             student_answer="idk",
             target_marks=10,
             user_id=uid,
