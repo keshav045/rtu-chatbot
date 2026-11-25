@@ -9,12 +9,20 @@ Tests:
 5. Selective memory forgetting and complete reset lifecycle.
 """
 
+import uuid
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.database.models import Base, User, StudentMemory, TopicMastery, Branch
+from app.database.models import Base, User, StudentMemory, TopicMastery, Branch, SessionModel
+from app.database.session import SessionLocal
+from app.main import app
+from app.retrieval.pipeline import RetrievalPipeline
+from app.services.chat_service import ChatService
 from app.services.memory_service import MemoryService
+from app.services.quiz_service import QuizService
+from app.core.config import settings
 
 
 @pytest.fixture
@@ -134,3 +142,136 @@ def test_memory_clear_lifecycle(memory_db):
     ctx = MemoryService.get_student_memory_context(memory_db, user_id=user_id)
     assert len(ctx["weak_topics"]) == 0
     assert len(ctx["facts"]) == 0
+
+
+def test_quiz_evaluation_updates_topic_mastery():
+    """Verify QuizService grades persist TopicMastery updates in long-term memory."""
+    uid = f"quiz_mem_{uuid.uuid4().hex[:8]}"
+    db = SessionLocal()
+    try:
+        quiz_svc = QuizService()
+        q = quiz_svc.get_next_question(db, "DSA")
+
+        # High-scoring answer -> not weak
+        good_ans = (
+            "A binary search tree is a data structure with definition rules where left nodes "
+            "are smaller and right nodes are larger. Step 1 compare root, step 2 recurse. "
+            "For example tree with nodes 10, 5, 15 achieves O(log n) average search complexity "
+            "as shown in the diagram."
+        )
+        res = quiz_svc.evaluate_answer(
+            db=db,
+            question_id=q["question_id"],
+            question=q["question_text"],
+            topic_id=q.get("topic_id"),
+            student_answer=good_ans,
+            target_marks=10,
+            user_id=uid,
+        )
+        assert res["score"] >= 6.0
+        assert res.get("topic_mastery") is not None
+        masteries = MemoryService.get_all_topic_masteries(db, uid)
+        assert len(masteries) == 1
+        assert masteries[0]["is_weak_area"] is False
+
+        # Low-scoring answer -> flagged as weak area
+        bad_res = quiz_svc.evaluate_answer(
+            db=db,
+            question_id=q["question_id"],
+            question=q["question_text"],
+            topic_id=q.get("topic_id"),
+            student_answer="idk",
+            target_marks=10,
+            user_id=uid,
+        )
+        assert bad_res["score"] == 0.0
+        masteries_after = MemoryService.get_all_topic_masteries(db, uid)
+        assert masteries_after[0]["is_weak_area"] is True
+    finally:
+        MemoryService.clear_student_memory(db, uid)
+        u = db.query(User).filter(User.id == uid).first()
+        if u:
+            db.delete(u)
+            db.commit()
+        db.close()
+
+
+def test_rejected_out_of_syllabus_query_does_not_pollute_memory():
+    """Verify TopicPaperVerifier-rejected off-topic queries are not stored as episodic memory."""
+    uid = f"rej_mem_{uuid.uuid4().hex[:8]}"
+    sid = f"sess_{uuid.uuid4().hex[:8]}"
+    db = SessionLocal()
+    try:
+        pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
+        pipeline.load_indexes(db)
+        chat_svc = ChatService(pipeline=pipeline)
+        res = chat_svc.process_turn(
+            db=db,
+            user_message="How to make pasta at home?",
+            session_id=sid,
+            filters={"subject": "OS"},
+            provider_name="offline",
+            user_id=uid,
+        )
+        assert res["screening"]["is_in_syllabus"] is False
+        assert MemoryService.get_all_memories(db, uid) == []
+    finally:
+        sess = db.query(SessionModel).filter(SessionModel.id == sid).first()
+        if sess:
+            db.delete(sess)
+        MemoryService.clear_student_memory(db, uid)
+        u = db.query(User).filter(User.id == uid).first()
+        if u:
+            db.delete(u)
+            db.commit()
+        else:
+            db.commit()
+        db.close()
+
+
+def test_memory_rest_api_crud():
+    """Verify GET/POST/DELETE /api/memory and /api/memory/mastery REST endpoints."""
+    uid = f"api_mem_{uuid.uuid4().hex[:8]}"
+    with TestClient(app) as client:
+        post_mem = client.post("/api/memory", json={
+            "user_id": uid,
+            "category": "study_goal",
+            "content": "Finish DBMS Unit 3 normalization before Friday",
+            "importance": 1.8,
+        })
+        assert post_mem.status_code == 200, post_mem.text
+        mem_id = post_mem.json()["memory"]["id"]
+
+        post_mast = client.post("/api/memory/mastery", json={
+            "user_id": uid,
+            "subject_code": "DBMS",
+            "topic_name": "BCNF Normalization",
+            "confidence_delta": -0.1,
+            "is_weak": True,
+            "notes": "Needs decomposition practice",
+        })
+        assert post_mast.status_code == 200, post_mast.text
+
+        get_res = client.get(f"/api/memory?user_id={uid}&subject=DBMS")
+        assert get_res.status_code == 200, get_res.text
+        body = get_res.json()
+        assert body["user_id"] == uid
+        assert len(body["memories"]) == 1
+        assert len(body["topic_mastery"]) == 1
+        assert "BCNF Normalization" in body["weak_topics"]
+
+        del_one = client.delete(f"/api/memory/{mem_id}")
+        assert del_one.status_code == 200
+
+        del_all = client.delete(f"/api/memory?user_id={uid}")
+        assert del_all.status_code == 200
+        assert del_all.json()["deleted_topic_masteries"] == 1
+
+    db = SessionLocal()
+    try:
+        u = db.query(User).filter(User.id == uid).first()
+        if u:
+            db.delete(u)
+            db.commit()
+    finally:
+        db.close()

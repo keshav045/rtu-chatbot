@@ -120,7 +120,12 @@ def _extract_error_detail(resp: requests.Response) -> str:
         if detail:
             return str(detail)
         if isinstance(data, dict) and data.get("error"):
-            return str(data["error"])
+            err_val = data["error"]
+            if isinstance(err_val, dict):
+                return str(err_val.get("message") or err_val)
+            return str(err_val)
+        if isinstance(data, dict) and data.get("message"):
+            return str(data["message"])
     except ValueError:
         pass
     text = (resp.text or "").strip()
@@ -157,6 +162,9 @@ def api_request(
     try:
         return resp.json(), None
     except ValueError:
+        ctype = (resp.headers.get("content-type") or "").lower()
+        if "text/html" in ctype or resp.text.lstrip().lower().startswith("<!doctype"):
+            return None, f"Backend at {DEFAULT_BACKEND_URL} returned HTML instead of JSON for /api{endpoint}."
         return {"raw": resp.text}, None
 
 

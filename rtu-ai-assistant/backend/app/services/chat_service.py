@@ -989,6 +989,7 @@ class ChatService:
 
             if not tv_res.get("is_rtu_related", False):
                 # Deterministic out-of-the-box / out-of-syllabus rejection (even on unindexed subjects like OS/AI/PHY)
+                intent = IntentType.OUT_OF_SYLLABUS
                 input_screening.is_in_syllabus = False
                 input_screening.scope_score = 0.0
                 input_screening.violation_reason = "OUT_OF_SYLLABUS_TOPIC"
@@ -1219,18 +1220,24 @@ class ChatService:
             session_obj.updated_at = datetime.utcnow()
         db.commit()
 
-        try:
-            eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
-            MemoryService.record_turn_interaction(
-                db=db,
-                user_id=eff_user_id,
-                query=user_message,
-                answer=assistant_reply,
-                subject=target_subject,
-                intent=intent.value if intent else "academic"
-            )
-        except Exception as mem_err:
-            logger.debug(f"Student long-term memory recording skipped: {mem_err}")
+        is_rejected_turn = (
+            not input_screening.is_safe
+            or not input_screening.is_in_syllabus
+            or intent in (IntentType.SECURITY_VIOLATION, IntentType.OUT_OF_SYLLABUS)
+        )
+        if not is_rejected_turn:
+            try:
+                eff_user_id = user_id or (session_obj.user_id if session_obj else None) or "student_default"
+                MemoryService.record_turn_interaction(
+                    db=db,
+                    user_id=eff_user_id,
+                    query=user_message,
+                    answer=assistant_reply,
+                    subject=target_subject,
+                    intent=intent.value if intent else "academic"
+                )
+            except Exception as mem_err:
+                logger.debug(f"Student long-term memory recording skipped: {mem_err}")
 
         first_line = user_message.strip().split("\n")[0]
         derived_title = first_line[:40] + ("..." if len(first_line) > 40 else "")

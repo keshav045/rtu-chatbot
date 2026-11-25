@@ -5,14 +5,18 @@ Generates questions from syllabus topics and past papers, evaluates student answ
 scores them (0-10), and provides constructive senior feedback.
 """
 
+import logging
 import uuid
 import re
 from typing import List, Dict, Any, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 
-from app.database.models import Topic, Question, QuizAttempt, Subject, Paper, SessionModel
+from app.database.models import Topic, Question, QuizAttempt, Subject, Paper, SessionModel, Unit
 from app.llm.llm_factory import get_llm_provider
+from app.services.memory_service import MemoryService
+
+logger = logging.getLogger("rtu.quiz_service")
 
 class QuizService:
     def get_next_question(
@@ -79,6 +83,104 @@ class QuizService:
             "exam_tip": "Structure your answer with: 1. Definition, 2. Diagram / Flow, 3. Practical Example."
         }
 
+    @staticmethod
+    def _resolve_quiz_context(
+        db: Session,
+        user_id: Optional[str],
+        session_id: Optional[str],
+        topic_id: Optional[str],
+        question_id: Optional[str],
+        question_text: str,
+    ) -> tuple[str, str, str]:
+        """Resolves (effective_user_id, subject_code, topic_name) for TopicMastery updates."""
+        sess_obj = db.query(SessionModel).filter(SessionModel.id == session_id).first() if session_id else None
+        eff_user_id = (
+            (user_id.strip() if user_id and user_id.strip() else None)
+            or (sess_obj.user_id if sess_obj and sess_obj.user_id else None)
+            or MemoryService.DEFAULT_USER_ID
+        )
+
+        subject_code = "GENERAL"
+        topic_name = ""
+
+        if question_id and question_id != "unknown":
+            q_rec = db.query(Question).filter(Question.id == question_id).first()
+            if q_rec:
+                if q_rec.topic and q_rec.topic.name:
+                    topic_name = q_rec.topic.name
+                if q_rec.paper and q_rec.paper.subject and q_rec.paper.subject.short_name:
+                    subject_code = q_rec.paper.subject.short_name.upper()
+
+        if topic_id and (not topic_name or subject_code == "GENERAL"):
+            t_rec = db.query(Topic).filter(Topic.id == topic_id).first()
+            if t_rec:
+                if not topic_name and t_rec.name:
+                    topic_name = t_rec.name
+                if subject_code == "GENERAL" and t_rec.unit_id:
+                    unit_rec = db.query(Unit).filter(Unit.id == t_rec.unit_id).first()
+                    if unit_rec and unit_rec.subject and unit_rec.subject.short_name:
+                        subject_code = unit_rec.subject.short_name.upper()
+
+        if subject_code == "GENERAL" and sess_obj and sess_obj.subject_id:
+            subj_rec = db.query(Subject).filter(Subject.id == sess_obj.subject_id).first()
+            if subj_rec and subj_rec.short_name:
+                subject_code = subj_rec.short_name.upper()
+
+        if not topic_name:
+            cleaned = re.sub(r"\s+", " ", (question_text or "").strip())
+            if cleaned and cleaned != "RTU Examination Practice Question":
+                topic_name = cleaned[:60]
+            else:
+                topic_name = f"{subject_code} Quiz Practice" if subject_code != "GENERAL" else "General Quiz Practice"
+
+        return eff_user_id, subject_code, topic_name
+
+    @classmethod
+    def _record_quiz_mastery(
+        cls,
+        db: Session,
+        user_id: Optional[str],
+        session_id: Optional[str],
+        topic_id: Optional[str],
+        question_id: Optional[str],
+        question_text: str,
+        score: float,
+        max_marks: float,
+    ) -> Optional[Dict[str, Any]]:
+        """Updates persistent TopicMastery in long-term memory from quiz performance."""
+        try:
+            eff_user_id, subject_code, topic_name = cls._resolve_quiz_context(
+                db=db,
+                user_id=user_id,
+                session_id=session_id,
+                topic_id=topic_id,
+                question_id=question_id,
+                question_text=question_text,
+            )
+            MemoryService.get_or_create_user(db, user_id=eff_user_id)
+            score_10 = (score / max_marks) * 10.0 if max_marks > 0 else 0.0
+            is_weak = score_10 < 6.0
+            delta = 0.25 if score_10 >= 8.0 else (0.1 if score_10 >= 6.0 else -0.2)
+            mastery = MemoryService.update_topic_mastery(
+                db=db,
+                user_id=eff_user_id,
+                subject_code=subject_code,
+                topic_name=topic_name,
+                confidence_delta=delta,
+                is_weak=is_weak,
+                notes=f"Quiz score: {score:.1f}/{max_marks:.0f} ({score_10:.1f}/10)",
+            )
+            return {
+                "user_id": mastery.user_id,
+                "subject_code": mastery.subject_code,
+                "topic_name": mastery.topic_name,
+                "confidence_score": round(mastery.confidence_score, 2),
+                "is_weak_area": mastery.is_weak_area,
+            }
+        except Exception as err:
+            logger.debug(f"Quiz topic mastery sync skipped: {err}")
+            return None
+
     def evaluate_answer(
         self,
         db: Session,
@@ -87,7 +189,8 @@ class QuizService:
         question: Optional[str] = None,
         topic_id: Optional[str] = None,
         session_id: Optional[str] = None,
-        target_marks: int = 10
+        target_marks: int = 10,
+        user_id: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Evaluates a student's answer using RTU examination rubrics:
@@ -113,6 +216,9 @@ class QuizService:
 
         # 1. Empty or trivial answer check
         if not ans_clean or word_count < 4:
+            mastery_info = self._record_quiz_mastery(
+                db, user_id, session_id, topic_id, question_id, question_text, 0.0, max_marks
+            )
             return {
                 "score": 0.0,
                 "max_score": max_marks,
@@ -125,11 +231,15 @@ class QuizService:
                     "working_steps": 0.0,
                     "example": 0.0
                 },
-                "senior_exam_tip": "In RTU papers, always attempt questions by stating the formal definition and drawing a block diagram."
+                "senior_exam_tip": "In RTU papers, always attempt questions by stating the formal definition and drawing a block diagram.",
+                "topic_mastery": mastery_info,
             }
 
         # 2. Refusal / "I don't know" check
         if re.search(r'\b(no idea|dont know|don\'t know|idk|nahi pata|just guessing|no answer|cannot answer)\b', ans_lower):
+            mastery_info = self._record_quiz_mastery(
+                db, user_id, session_id, topic_id, question_id, question_text, 0.0, max_marks
+            )
             return {
                 "score": 0.0,
                 "max_score": max_marks,
@@ -142,7 +252,8 @@ class QuizService:
                     "working_steps": 0.0,
                     "example": 0.0
                 },
-                "senior_exam_tip": "Never leave a question sheet blank in RTU examinations. Always write the relevant formulas or draw the general architecture."
+                "senior_exam_tip": "Never leave a question sheet blank in RTU examinations. Always write the relevant formulas or draw the general architecture.",
+                "topic_mastery": mastery_info,
             }
 
         # 3. Question Relevance Check
@@ -159,6 +270,9 @@ class QuizService:
 
         # If question has distinct technical terms but answer shares zero overlap
         if len(q_keywords) >= 2 and len(overlap) == 0:
+            mastery_info = self._record_quiz_mastery(
+                db, user_id, session_id, topic_id, question_id, question_text, 0.5, max_marks
+            )
             return {
                 "score": 0.5,
                 "max_score": max_marks,
@@ -171,7 +285,8 @@ class QuizService:
                     "working_steps": 0.0,
                     "example": 0.0
                 },
-                "senior_exam_tip": "Read the question carefully. RTU examiners quickly scan for key terms directly matching the question."
+                "senior_exam_tip": "Read the question carefully. RTU examiners quickly scan for key terms directly matching the question.",
+                "topic_mastery": mastery_info,
             }
 
         # 4. Rubric Pillars Evaluation
@@ -252,6 +367,10 @@ class QuizService:
             except Exception:
                 db.rollback()
 
+        mastery_info = self._record_quiz_mastery(
+            db, user_id, session_id, topic_id, question_id, question_text, scaled_score, max_marks
+        )
+
         scale_factor = max_marks / 10.0
         return {
             "score": scaled_score,
@@ -265,5 +384,6 @@ class QuizService:
                 "working_steps": round(score_steps * scale_factor, 1),
                 "example": round(score_ex * scale_factor, 1)
             },
-            "senior_exam_tip": "In RTU handwritten sheets, always draw a neat box around final formulas and label all axes or graph nodes."
+            "senior_exam_tip": "In RTU handwritten sheets, always draw a neat box around final formulas and label all axes or graph nodes.",
+            "topic_mastery": mastery_info,
         }

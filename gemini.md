@@ -45,7 +45,7 @@ This document provides complete technical documentation for all primary scripts,
   - `BACKEND_URL` env var (defaults to Cloud URL unless `run_app.bat` / env sets `http://127.0.0.1:8000`); `.streamlit/config.toml` sets dark theme colors (`#0b0b0c` canvas, `#171718` sidebar).
   - Student auth modal credentials (`roll_no`, `email`, `name`, `branch`, `year`, `password`), sidebar selectors (`Stream`, `Year`, dynamically filtered `Subject` via `GET /api/subjects?branch=...&year=...` with `FALLBACK_SUBJECTS`), chat input (`st.chat_input`), and `👍` / `👎` votes.
 - **Outputs & Side Effects**:
-  - Generates an isolated session `guest_user_id` before login and switches to authenticated `user_id` via `/api/auth/login` or `/api/auth/register` (resolving 4xx validation/auth errors cleanly via `_extract_error_detail()`).
+  - Generates an isolated session `guest_user_id` before login and switches to authenticated `user_id` via `/api/auth/login` or `/api/auth/register` (resolving 4xx validation/auth errors and nested `error.message` payloads cleanly via `_extract_error_detail()`, while `api_request()` rejects unexpected `text/html` proxy pages cleanly).
   - Scopes conversations and chat requests by `active_user_id()` (`GET /api/conversations?user_id=...`, `GET /api/conversations/{id}`, `DELETE /api/conversations/{id}`, `DELETE /api/conversations?user_id=...`) and sends top-level `branch`, `year`, `user_id`, and optional `filters.subject` to `POST /api/chat`.
   - Records inline correctness feedback via `POST /api/feedback`.
 - **End-to-End Operational Use Case**:
@@ -84,7 +84,7 @@ This document provides complete technical documentation for all primary scripts,
   - `db`, `user_message`, `session_id`, `provider_name`, `filters`, `top_k`, `language_pref`, `mode`, `user_id`, `branch`, `year`.
   - Subject-count check: flags `is_unindexed_subject=True` when `target_subject` has 0 papers OR 0 approved questions (e.g., `OS`), still running syllabus-topic verification via `TopicPaperVerifier` rather than skipping screening.
 - **Outputs & Side Effects**:
-  - Persists `User` (if unknown `user_id`), `SessionModel` (updating `updated_at` on each turn so active conversations sort first in `/api/conversations`), `Message` (`user` + `assistant`), `Citation`, and updates `StudentMemory`/`TopicMastery` in SQLite; returns `related_topics` and `topic_verification` alongside `citations`; emits LangSmith traces.
+  - Persists `User` (if unknown `user_id`), `SessionModel` (updating `updated_at` on each turn so active conversations sort first in `/api/conversations`), `Message` (`user` + `assistant`), `Citation`, and updates `StudentMemory`/`TopicMastery` in SQLite (skipping `MemoryService.record_turn_interaction()` when a turn is rejected for `SECURITY_VIOLATION`, `OUT_OF_SYLLABUS`, or `TopicPaperVerifier` `OUT_OF_SYLLABUS_TOPIC`); returns `related_topics` and `topic_verification` alongside `citations`; emits LangSmith traces.
 - **End-to-End Operational Use Case**:
   Processes all conversational turns from Streamlit, `/api/chat`, benchmarks, and evaluation scripts while blocking prompt injection, off-topic queries, and cross-subject citation leaks.
 
@@ -182,11 +182,12 @@ This document provides complete technical documentation for all primary scripts,
 - **Execution Command & Runtime Environment**:
   - Mounted under `/api` by `app/main.py`.
 - **Key Inputs & Configuration Parameters**:
-  - Pydantic schemas: `ChatRequest` (top-level `branch`, `year`, `filters`), `ChatFilterRequest`, `FeedbackRequest`, `PlanRequest` (`hours_left`), `RegisterRequest`, `QuizNextRequest`, `QuizAnswerRequest`.
+  - Pydantic schemas: `ChatRequest` (top-level `branch`, `year`, `filters`), `ChatFilterRequest`, `FeedbackRequest`, `PlanRequest` (`hours_left`), `RegisterRequest`, `QuizNextRequest`, `QuizAnswerRequest` (optional `user_id`), `MemoryCreateRequest`, `TopicMasteryUpdateRequest`.
   - Query filters on `GET /api/feedback`: `verdict` (`correct`/`incorrect`), `subject`, `limit`; `/api/papers` uses `.distinct()` to prevent duplicate rows across `SubjectOffering` branches.
 - **Outputs & Side Effects**:
   - Auth endpoints (`/api/auth/register`, `/api/auth/login`, `/api/auth/me`) return normalized user profiles via `_format_user_profile()` so `branch` always exposes the branch code (e.g. `"CSE"`) rather than `"BRANCH_CSE"`.
   - Per-user history & deletion routes (`GET /api/conversations?user_id=...`, `GET /api/conversations/{id}`, `DELETE /api/conversations/{id}`, `DELETE /api/conversations?user_id=...`) filter and delete user-owned conversations.
+  - Student Long-Term Memory routes (`GET /api/memory`, `POST /api/memory`, `POST /api/memory/mastery`, `DELETE /api/memory/{id}`, `DELETE /api/memory`) expose persistent `StudentMemory` facts/goals and `TopicMastery` records.
   - `POST /api/feedback` upserts by `message_id` and returns `is_correct` (`bool`) & `verdict` (`"Correct"` / `"Incorrect"`).
   - `GET /api/feedback` resolves associated `Message` + preceding user question + `SessionModel` subject via `_resolve_feedback_qa()` and returns `{summary: {total_rated, correct_count, incorrect_count, accuracy_pct}, records: [...]}`.
   - `DELETE /api/feedback/{feedback_id}` deletes a tracked feedback record.
@@ -201,7 +202,7 @@ This document provides complete technical documentation for all primary scripts,
 - **Core Purpose & Role**:
   - `IntentRouter`: classifies `SECURITY_VIOLATION`, `GREETING`, `CLOSING`, `HELP_CAPABILITIES`, `STUDY_PLAN` (supporting plural `hours?`/`hrs?`), `TOPIC_IMPORTANCE`, `PAST_YEAR_QUESTIONS`, `QUIZ_REQUEST`, `SUBJECT_SELECT`, `OUT_OF_SYLLABUS`, and `EXAM_QUESTION`.
   - `ImportanceService`: ranks topics by SQL mark/year aggregation (`Tier A`/`B`) and falls back cleanly via `_build_syllabus_fallback()` when a cataloged subject has >0 papers but 0 extracted questions (e.g., `OS`, `CN`, `AI`, `DAA`).
-  - `QuizService`: serves practice questions and evaluates answers on the 4-pillar RTU rubric (`rubric_breakdown`), verifying `SessionModel` existence before saving `QuizAttempt`.
+  - `QuizService`: serves practice questions and evaluates answers on the 4-pillar RTU rubric (`rubric_breakdown`), verifying `SessionModel` existence before saving `QuizAttempt` and updating persistent `TopicMastery` confidence/`is_weak_area` via `MemoryService` (`_resolve_quiz_context` + `_record_quiz_mastery`).
 - **Execution Command & Runtime Environment**:
   - Programmatic service classes called by `endpoints.py` and `chat_service.py`.
 - **Key Inputs & Configuration Parameters**:
@@ -244,6 +245,23 @@ This document provides complete technical documentation for all primary scripts,
   - Cleans up test records (`test_feedback_tracking.py`, `test_phase5`); Note `test_phase1_ingestion.py` asserts exact manifest field `total_papers_cataloged == 123`.
 - **End-to-End Operational Use Case**:
   Verification gate before any commit or deployment.
+
+---
+
+## 14. Hugging Face Space Gradio + FastAPI Combined Entrypoint
+
+- **Script Path & File Name**: `app.py` (with root `requirements.txt` and `README.md`)
+- **Core Purpose & Role**:
+  Serves both the Gradio web interface (`/` with `"Auto (Best Available)"` provider default and optional ZeroGPU acceleration) and the full FastAPI REST router (`/api/*`) on Hugging Face Spaces (`sdk: gradio`, `sdk_version: 6.32.0`). Runs `setup_langsmith_tracing()`, `init_db()`, `RetrievalPipeline`, `lc_retriever`, and `UploadService(pipeline=pipeline)` cleanly at startup, opens per-request `SessionLocal()` DB sessions in Gradio callbacks, and mounts `api_router` onto `gradio.routes.App` BEFORE `demo.launch(..., ssr_mode=False, strict_cors=False, _app=gradio_app)` so Gradio 6 SSR/SPA routing never blocks `POST /api/chat` with `405 Method Not Allowed`.
+- **Execution Command & Runtime Environment**:
+  - Command: `python app.py` (or `python app.py --test` for initialization smoke check).
+  - Port: `PORT` env var (default `7860`).
+- **Key Inputs & Configuration Parameters**:
+  - Root `requirements.txt` (includes `langchain*`, `langsmith`, `openai`, `python-dotenv`, and `gradio>=6.0.0`); HF Space Secrets (`OPENAI_API_KEY`, `GROQ_API_KEY`, `GEMINI_API_KEY`, `LANGCHAIN_API_KEY`).
+- **Outputs & Side Effects**:
+  - Serves `GET /` (Gradio UI) and `/api/*` REST endpoints on port `7860`.
+- **End-to-End Operational Use Case**:
+  Powers `https://keshavagarwal779-rtu-exam-assistant.hf.space`, enabling external UIs like `streamlit_app.py` on Streamlit Cloud to call `/api/chat`, `/api/auth/*`, `/api/memory*`, and `/api/conversations*`.
 
 ---
 

@@ -31,9 +31,11 @@ import pandas as pd
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.database.session import SessionLocal
+from app.core.tracer import setup_langsmith_tracing
+from app.database.session import SessionLocal, init_db
 from app.database.models import Subject, Question, Paper, Message, SessionModel
 from app.retrieval.pipeline import RetrievalPipeline
+from app.retrieval.lc_retriever import build_retriever
 from app.services.chat_service import ChatService
 from app.services.importance_service import ImportanceService
 from app.services.planner_service import PlannerService
@@ -45,15 +47,22 @@ from app.llm.llm_factory import get_llm_provider
 
 # --- Global Initialization (Eager Loading) ---
 print("[Startup] Initializing RTU Retrieval Pipeline and Database...")
-db = SessionLocal()
-pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
-pipeline.load_indexes(db)
-chat_service = ChatService(pipeline=pipeline)
+setup_langsmith_tracing()
+init_db()
+startup_db = SessionLocal()
+try:
+    pipeline = RetrievalPipeline(index_dir=settings.INDEXES_DIR)
+    pipeline.load_indexes(startup_db)
+    lc_retriever = build_retriever(db=startup_db)
+finally:
+    startup_db.close()
+
+chat_service = ChatService(pipeline=pipeline, lc_retriever=lc_retriever)
 importance_service = ImportanceService()
 planner_service = PlannerService()
 analytics_service = AnalyticsService(dense_indexer=pipeline.dense_indexer)
 quiz_service = QuizService()
-upload_service = UploadService()
+upload_service = UploadService(pipeline=pipeline)
 
 # Initialize REST API endpoints
 init_services(
@@ -69,22 +78,26 @@ print("[Startup] RTU Retrieval Pipeline and REST Endpoints ready.")
 
 # --- Helper: Query Past Exam Questions ---
 def get_past_questions(subject_filter: str, min_marks: int = 0) -> pd.DataFrame:
-    query = db.query(
-        Subject.short_name.label("Subject"),
-        Paper.year.label("Year"),
-        Question.part.label("Section"),
-        Question.marks.label("Marks"),
-        Question.text.label("Question_Text"),
-        Paper.source_pdf.label("Source_PDF")
-    ).join(Paper, Question.paper_id == Paper.id).join(Subject, Paper.subject_id == Subject.id)
+    req_db = SessionLocal()
+    try:
+        query = req_db.query(
+            Subject.short_name.label("Subject"),
+            Paper.year.label("Year"),
+            Question.part.label("Section"),
+            Question.marks.label("Marks"),
+            Question.text.label("Question_Text"),
+            Paper.source_pdf.label("Source_PDF")
+        ).join(Paper, Question.paper_id == Paper.id).join(Subject, Paper.subject_id == Subject.id)
 
-    if subject_filter and subject_filter != "All Subjects":
-        query = query.filter(Subject.short_name == subject_filter)
+        if subject_filter and subject_filter != "All Subjects":
+            query = query.filter(Subject.short_name == subject_filter)
 
-    if min_marks > 0:
-        query = query.filter(Question.marks >= min_marks)
+        if min_marks > 0:
+            query = query.filter(Question.marks >= min_marks)
 
-    records = query.order_by(Paper.year.desc(), Question.marks.desc()).limit(150).all()
+        records = query.order_by(Paper.year.desc(), Question.marks.desc()).limit(150).all()
+    finally:
+        req_db.close()
     if not records:
         return pd.DataFrame(columns=["Subject", "Year", "Section", "Marks", "Question Text", "Source PDF"])
 
@@ -131,20 +144,21 @@ def run_chat_turn(
         return history, "", session_id
 
     # Configure custom API key if provided
-    clean_provider = "groq"
-    if "groq" in provider_name.lower():
+    clean_provider = None
+    prov_low = (provider_name or "").lower()
+    if "groq" in prov_low:
         clean_provider = "groq"
         if custom_api_key.strip():
             os.environ["GROQ_API_KEY"] = custom_api_key.strip()
-    elif "gemini" in provider_name.lower():
+    elif "gemini" in prov_low:
         clean_provider = "gemini"
         if custom_api_key.strip():
             os.environ["GEMINI_API_KEY"] = custom_api_key.strip()
-    elif "openai" in provider_name.lower():
+    elif "openai" in prov_low:
         clean_provider = "openai"
         if custom_api_key.strip():
             os.environ["OPENAI_API_KEY"] = custom_api_key.strip()
-    elif "offline" in provider_name.lower():
+    elif "offline" in prov_low:
         clean_provider = "offline"
 
     filters = {}
@@ -153,9 +167,10 @@ def run_chat_turn(
 
     current_session = session_id or f"sess_{uuid.uuid4().hex[:12]}"
 
+    req_db = SessionLocal()
     try:
         res = chat_service.send_message(
-            db=db,
+            db=req_db,
             user_message=user_message,
             session_id=current_session,
             filters=filters,
@@ -167,6 +182,8 @@ def run_chat_turn(
     except Exception as e:
         assistant_reply = f"An error occurred while generating response: {str(e)}"
         citations_md = "*Citations unavailable due to generation error.*"
+    finally:
+        req_db.close()
 
     # Append to history for Gradio 6.x messages format
     new_history = list(history)
@@ -248,12 +265,13 @@ with gr.Blocks(title="RTU AI Academic Assistant & Exam Coach") as demo:
                     gr.Markdown("### Control Panel")
                     provider_dropdown = gr.Dropdown(
                         choices=[
+                            "Auto (Best Available)",
                             "Groq (llama-3.3-70b-versatile)",
                             "Gemini (gemini-1.5-flash)",
                             "OpenAI (gpt-4o-mini)",
                             "Offline (RTU Syllabus & Past Papers Grounding)"
                         ],
-                        value="Groq (llama-3.3-70b-versatile)",
+                        value="Auto (Best Available)",
                         label="LLM Provider"
                     )
                     api_key_input = gr.Textbox(
@@ -296,10 +314,11 @@ with gr.Blocks(title="RTU AI Academic Assistant & Exam Coach") as demo:
             def handle_feedback(x: gr.LikeData, current_session: str):
                 if not current_session:
                     return
-                rating_val = 1 if x.liked else -1
+                rating_val = "up" if x.liked else "down"
+                req_db = SessionLocal()
                 try:
                     from app.database.models import Feedback, Message
-                    sess_messages = db.query(Message).filter(
+                    sess_messages = req_db.query(Message).filter(
                         Message.session_id == current_session,
                         Message.role == "assistant"
                     ).order_by(Message.created_at.desc()).all()
@@ -312,11 +331,13 @@ with gr.Blocks(title="RTU AI Academic Assistant & Exam Coach") as demo:
                         rating=rating_val,
                         comment=f"Rating submitted via Gradio ({'Thumbs Up' if x.liked else 'Thumbs Down'})"
                     )
-                    db.add(fb)
-                    db.commit()
+                    req_db.add(fb)
+                    req_db.commit()
                     print(f"[Feedback] Recorded rating {rating_val} for message {target_msg_id} in session {current_session}")
                 except Exception as e:
                     print(f"[Feedback Error] Failed to log feedback: {e}")
+                finally:
+                    req_db.close()
 
             chatbot.like(
                 handle_feedback,
@@ -412,18 +433,20 @@ User Query (English / Hinglish)
             - **Total Retrieval Overhead**: Under 70 ms
             """)
 
-# --- Enable Gradio Queue and Mount FastAPI REST API ---
-demo.queue()
-
+# --- Enable Gradio Queue and Mount FastAPI REST API BEFORE launch() ---
 from fastapi.middleware.cors import CORSMiddleware
-demo.app.add_middleware(
+from gradio.routes import App as GradioApp
+
+demo.queue()
+gradio_app = GradioApp()
+gradio_app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-demo.app.include_router(api_router, prefix="/api")
+gradio_app.include_router(api_router, prefix="/api")
 
 if __name__ == "__main__":
     if "--test" in sys.argv:
@@ -434,5 +457,8 @@ if __name__ == "__main__":
         server_name="0.0.0.0",
         server_port=int(os.getenv("PORT", 7860)),
         share=False,
-        css=custom_css
+        css=custom_css,
+        ssr_mode=False,
+        strict_cors=False,
+        _app=gradio_app,
     )

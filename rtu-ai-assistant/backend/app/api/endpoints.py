@@ -26,11 +26,13 @@ from sqlalchemy import func
 from app.database.session import get_db
 from app.database.models import (
     Paper, Question, Subject, Unit, Topic, SessionModel, Message,
-    Citation, Upload, Feedback, QuizAttempt, Branch, SubjectOffering, User
+    Citation, Upload, Feedback, QuizAttempt, Branch, SubjectOffering, User,
+    StudentMemory, TopicMastery
 )
 from app.core.config import settings
 from app.core.tracer import send_feedback_to_langsmith, is_tracing_active, get_current_project_name
 from app.core.langsmith_datasets import sync_benchmark_to_langsmith
+from app.services.memory_service import MemoryService
 
 AUTH_SALT = "rtu_exam_student_salt_v2"
 
@@ -133,6 +135,21 @@ class QuizAnswerRequest(BaseModel):
     session_id: Optional[str] = None
     question_id: str = Field(..., description="ID of the question being answered")
     student_answer: str = Field(..., min_length=2, description="Student's written answer")
+    user_id: Optional[str] = Field(None, description="Optional student user ID for TopicMastery tracking")
+
+class MemoryCreateRequest(BaseModel):
+    user_id: Optional[str] = Field(None, description="Student user ID (defaults to student_default)")
+    category: str = Field("academic_fact", description="academic_fact | study_goal | preference | episodic_summary")
+    content: str = Field(..., min_length=2, max_length=500, description="Memory note or goal")
+    importance: float = Field(1.0, ge=0.1, le=5.0)
+
+class TopicMasteryUpdateRequest(BaseModel):
+    user_id: Optional[str] = Field(None, description="Student user ID (defaults to student_default)")
+    subject_code: str = Field(..., min_length=1, max_length=50, description="Subject short code e.g. 'DSA'")
+    topic_name: str = Field(..., min_length=2, max_length=150, description="Topic name")
+    confidence_delta: float = Field(0.0, ge=-1.0, le=1.0)
+    is_weak: Optional[bool] = None
+    notes: Optional[str] = Field(None, max_length=300)
 
 class FeedbackRequest(BaseModel):
     session_id: Optional[str] = None
@@ -468,7 +485,8 @@ def evaluate_quiz_answer(request: QuizAnswerRequest, db: Session = Depends(get_d
         db=db,
         question_id=request.question_id,
         student_answer=request.student_answer,
-        session_id=request.session_id
+        session_id=request.session_id,
+        user_id=request.user_id,
     )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
@@ -690,6 +708,109 @@ def delete_feedback_entry(feedback_id: str, db: Session = Depends(get_db)):
     db.delete(fb)
     db.commit()
     return {"status": "deleted", "feedback_id": feedback_id}
+
+
+# --- Student Long-Term Memory & Topic Mastery Endpoints ---
+
+_VALID_MEMORY_CATEGORIES = {"academic_fact", "study_goal", "preference", "episodic_summary"}
+
+
+@router.get("/memory", tags=["Student Long-Term Memory"], summary="Get Student Long-Term Memory & Topic Mastery")
+def get_student_memory(
+    user_id: Optional[str] = Query(None, description="Student user ID (defaults to student_default)"),
+    subject: Optional[str] = Query(None, description="Optional subject short code filter"),
+    db: Session = Depends(get_db),
+):
+    """Returns persistent memories, weak/mastered topics, and prompt summary for a student."""
+    eff_uid = (user_id or MemoryService.DEFAULT_USER_ID).strip()
+    ctx = MemoryService.get_student_memory_context(db=db, user_id=eff_uid, target_subject=subject)
+    memories = MemoryService.get_all_memories(db=db, user_id=eff_uid)
+    masteries = MemoryService.get_all_topic_masteries(db=db, user_id=eff_uid)
+    if subject and subject.strip().lower() != "all":
+        subj_clean = subject.replace("SUBJ_", "").strip().upper()
+        masteries = [m for m in masteries if (m.get("subject_code") or "").upper() in (subj_clean, "GENERAL")]
+    return {
+        "user_id": eff_uid,
+        "profile": {
+            "branch": ctx.get("branch"),
+            "year": ctx.get("year"),
+            "language_pref": ctx.get("language_pref"),
+        },
+        "weak_topics": ctx.get("weak_topics", []),
+        "mastered_topics": ctx.get("mastered_topics", []),
+        "memories": memories,
+        "topic_mastery": masteries,
+    }
+
+
+@router.post("/memory", tags=["Student Long-Term Memory"], summary="Store Explicit Student Memory Fact or Goal")
+def add_student_memory(request: MemoryCreateRequest, db: Session = Depends(get_db)):
+    """Creates or updates an explicit long-term memory entry for a student."""
+    category = (request.category or "academic_fact").strip().lower()
+    if category not in _VALID_MEMORY_CATEGORIES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid category '{request.category}'. Must be one of: {', '.join(sorted(_VALID_MEMORY_CATEGORIES))}.",
+        )
+    eff_uid = (request.user_id or MemoryService.DEFAULT_USER_ID).strip()
+    record = MemoryService.add_explicit_memory(
+        db=db,
+        user_id=eff_uid,
+        category=category,
+        content=request.content,
+        importance=request.importance,
+    )
+    return {"status": "saved", "user_id": eff_uid, "memory": record}
+
+
+@router.post("/memory/mastery", tags=["Student Long-Term Memory"], summary="Record or Update Topic Mastery")
+def upsert_topic_mastery(request: TopicMasteryUpdateRequest, db: Session = Depends(get_db)):
+    """Creates or updates student competency / weak-area status for a syllabus topic."""
+    eff_uid = (request.user_id or MemoryService.DEFAULT_USER_ID).strip()
+    MemoryService.get_or_create_user(db, user_id=eff_uid)
+    clean_sub = request.subject_code.replace("SUBJ_", "").strip().upper()
+    mastery = MemoryService.update_topic_mastery(
+        db=db,
+        user_id=eff_uid,
+        subject_code=clean_sub,
+        topic_name=request.topic_name,
+        confidence_delta=request.confidence_delta,
+        is_weak=request.is_weak,
+        notes=request.notes,
+    )
+    return {
+        "status": "saved",
+        "user_id": eff_uid,
+        "topic_mastery": {
+            "id": mastery.id,
+            "subject_code": mastery.subject_code,
+            "topic_name": mastery.topic_name,
+            "confidence_score": round(mastery.confidence_score, 2),
+            "attempts_count": mastery.attempts_count,
+            "is_weak_area": mastery.is_weak_area,
+            "notes": mastery.notes,
+        },
+    }
+
+
+@router.delete("/memory/{memory_id}", tags=["Student Long-Term Memory"], summary="Delete Single Memory Entry")
+def delete_single_memory(memory_id: str, db: Session = Depends(get_db)):
+    mem = db.query(StudentMemory).filter(StudentMemory.id == memory_id).first()
+    if not mem:
+        raise HTTPException(status_code=404, detail="Memory entry not found")
+    db.delete(mem)
+    db.commit()
+    return {"status": "deleted", "memory_id": memory_id}
+
+
+@router.delete("/memory", tags=["Student Long-Term Memory"], summary="Clear All Student Long-Term Memories")
+def clear_all_student_memory(
+    user_id: Optional[str] = Query(None, description="Student user ID (defaults to student_default)"),
+    db: Session = Depends(get_db),
+):
+    eff_uid = (user_id or MemoryService.DEFAULT_USER_ID).strip()
+    counts = MemoryService.clear_student_memory(db=db, user_id=eff_uid)
+    return {"status": "cleared", "user_id": eff_uid, **counts}
 
 # --- Section 10: Conversational RAG & Coaching Endpoints ---
 
